@@ -37,6 +37,13 @@ export default function CartPage() {
   const [message, setMessage] = useState("");
 
   // ==========================================
+  // BACKEND URL
+  // ==========================================
+
+  const API_URL =
+    process.env.NEXT_PUBLIC_API_URL;
+
+  // ==========================================
   // LOAD CART
   // ==========================================
 
@@ -248,6 +255,16 @@ export default function CartPage() {
 
     try {
       // ========================================
+      // CHECK BACKEND URL
+      // ========================================
+
+      if (!API_URL) {
+        throw new Error(
+          "Backend URL is missing. Please check NEXT_PUBLIC_API_URL in Vercel."
+        );
+      }
+
+      // ========================================
       // RAZORPAY KEY
       // ========================================
 
@@ -257,7 +274,7 @@ export default function CartPage() {
 
       if (!razorpayKey) {
         throw new Error(
-          "Razorpay key is missing. Check frontend/.env.local."
+          "Razorpay key is missing. Please check NEXT_PUBLIC_RAZORPAY_KEY_ID in Vercel."
         );
       }
 
@@ -309,7 +326,7 @@ export default function CartPage() {
 
       const orderResponse =
         await fetch(
-          "http://localhost:5000/api/create-order",
+          `${API_URL}/api/create-order`,
           {
             method: "POST",
 
@@ -354,7 +371,6 @@ export default function CartPage() {
       }
 
       // ========================================
-      // IMPORTANT
       // DATABASE ORDER ID
       // ========================================
 
@@ -419,7 +435,7 @@ export default function CartPage() {
 
               const verifyResponse =
                 await fetch(
-                  "http://localhost:5000/api/verify-payment",
+                  `${API_URL}/api/verify-payment`,
                   {
                     method: "POST",
 
@@ -564,7 +580,7 @@ export default function CartPage() {
               );
 
               // ==================================
-              // REDIRECT WITH ORDER ID
+              // REDIRECT
               // ==================================
 
               setTimeout(() => {
@@ -572,6 +588,7 @@ export default function CartPage() {
                   `/payment-success?id=${finalOrderId}`
                 );
               }, 700);
+
             } catch (error) {
               console.error(
                 "Payment verification error:",
@@ -627,6 +644,7 @@ export default function CartPage() {
       );
 
       razorpay.open();
+
     } catch (error) {
       console.error(
         "Checkout error:",
@@ -1084,4 +1102,3 @@ export default function CartPage() {
     </main>
   );
 }
-
