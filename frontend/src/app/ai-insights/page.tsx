@@ -1,6 +1,8 @@
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import {
   ResponsiveContainer,
@@ -94,19 +96,14 @@ export default function AIInsightsPage() {
 
       setError("");
 
-      const response = await fetch(
-        `${BACKEND_URL}/api/ai-insights`,
-        {
-          cache: "no-store",
-        }
-      );
+      const response = await fetch(`${BACKEND_URL}/api/ai-insights`, {
+        cache: "no-store",
+      });
 
       const result: AIResponse = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(
-          result.error || "Unable to load AI insights"
-        );
+        throw new Error(result.error || "Unable to load AI insights");
       }
 
       setData(result);
@@ -128,21 +125,15 @@ export default function AIInsightsPage() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const response = await fetch(
-        `${BACKEND_URL}/api/orders`,
-        {
-          cache: "no-store",
-        }
-      );
+      const response = await fetch(`${BACKEND_URL}/api/orders`, {
+        cache: "no-store",
+      });
 
       if (!response.ok) return;
 
       const result = await response.json();
 
-      if (
-        result.success &&
-        Array.isArray(result.orders)
-      ) {
+      if (result.success && Array.isArray(result.orders)) {
         setOrders(result.orders);
       }
     } catch (err) {
@@ -166,23 +157,19 @@ export default function AIInsightsPage() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
-        const [metricsResponse, ordersResponse] =
-          await Promise.all([
-            fetch(`${BACKEND_URL}/api/metrics`, {
-              cache: "no-store",
-            }),
-            fetch(`${BACKEND_URL}/api/orders`, {
-              cache: "no-store",
-            }),
-          ]);
+        const [metricsResponse, ordersResponse] = await Promise.all([
+          fetch(`${BACKEND_URL}/api/metrics`, {
+            cache: "no-store",
+          }),
+          fetch(`${BACKEND_URL}/api/orders`, {
+            cache: "no-store",
+          }),
+        ]);
 
         if (metricsResponse.ok) {
           const result = await metricsResponse.json();
 
-          if (
-            result.success &&
-            result.metrics
-          ) {
+          if (result.success && result.metrics) {
             setData((previous) => ({
               ...(previous || { success: true }),
               metrics: result.metrics,
@@ -193,10 +180,7 @@ export default function AIInsightsPage() {
         if (ordersResponse.ok) {
           const result = await ordersResponse.json();
 
-          if (
-            result.success &&
-            Array.isArray(result.orders)
-          ) {
+          if (result.success && Array.isArray(result.orders)) {
             setOrders(result.orders);
           }
         }
@@ -215,8 +199,7 @@ export default function AIInsightsPage() {
   const chartData = useMemo(() => {
     const paidOrders = orders
       .filter(
-        (order) =>
-          order.status.toLowerCase() === "paid"
+        (order) => order.status.toLowerCase() === "paid"
       )
       .sort(
         (a, b) =>
@@ -238,9 +221,7 @@ export default function AIInsightsPage() {
         revenue: amount,
         totalRevenue: runningRevenue,
         transactions: index + 1,
-        aov: Math.round(
-          runningRevenue / (index + 1)
-        ),
+        aov: Math.round(runningRevenue / (index + 1)),
         date: date.toLocaleDateString("en-IN", {
           day: "2-digit",
           month: "short",
@@ -258,8 +239,7 @@ export default function AIInsightsPage() {
       return {
         score: 0,
         label: "NO DATA",
-        description:
-          "No transactions are available for analysis.",
+        description: "No transactions are available for analysis.",
         paymentHealth: 0,
         revenueStability: 0,
         transactionVolume: 0,
@@ -268,13 +248,11 @@ export default function AIInsightsPage() {
     }
 
     const paidOrders = orders.filter(
-      (order) =>
-        order.status.toLowerCase() === "paid"
+      (order) => order.status.toLowerCase() === "paid"
     );
 
     const failedOrders = orders.filter(
-      (order) =>
-        order.status.toLowerCase() === "failed"
+      (order) => order.status.toLowerCase() === "failed"
     );
 
     const paymentHealth = Math.round(
@@ -292,8 +270,7 @@ export default function AIInsightsPage() {
 
     const lowValueRatio =
       paidOrders.length > 0
-        ? lowValueOrders.length /
-          paidOrders.length
+        ? lowValueOrders.length / paidOrders.length
         : 0;
 
     const lowValueHealth = Math.max(
@@ -301,29 +278,23 @@ export default function AIInsightsPage() {
       Math.round(100 - lowValueRatio * 100)
     );
 
-    const amounts = paidOrders.map((order) =>
-      Number(order.amount)
-    );
+    const amounts = paidOrders.map((order) => Number(order.amount));
 
     let revenueStability = 100;
 
     if (amounts.length >= 2) {
       const average =
-        amounts.reduce(
-          (sum, value) => sum + value,
-          0
-        ) / amounts.length;
+        amounts.reduce((sum, value) => sum + value, 0) /
+        amounts.length;
 
       const variance =
         amounts.reduce(
           (sum, value) =>
-            sum +
-            Math.pow(value - average, 2),
+            sum + Math.pow(value - average, 2),
           0
         ) / amounts.length;
 
-      const standardDeviation =
-        Math.sqrt(variance);
+      const standardDeviation = Math.sqrt(variance);
 
       const coefficient =
         average > 0
@@ -333,11 +304,7 @@ export default function AIInsightsPage() {
       revenueStability = Math.max(
         0,
         Math.round(
-          100 -
-            Math.min(
-              100,
-              coefficient * 100
-            )
+          100 - Math.min(100, coefficient * 100)
         )
       );
     }
@@ -352,25 +319,16 @@ export default function AIInsightsPage() {
     let score = 100 - healthScore;
 
     if (failedOrders.length > 0) {
-      score += Math.min(
-        15,
-        failedOrders.length * 5
-      );
+      score += Math.min(15, failedOrders.length * 5);
     }
 
-    const confidence = Math.min(
-      1,
-      orders.length / 10
-    );
+    const confidence = Math.min(1, orders.length / 10);
 
     score = Math.round(
       score * (0.6 + confidence * 0.4)
     );
 
-    score = Math.max(
-      0,
-      Math.min(100, score)
-    );
+    score = Math.max(0, Math.min(100, score));
 
     let label = "LOW RISK";
     let description =
@@ -422,8 +380,7 @@ export default function AIInsightsPage() {
     }
 
     const failedOrders = orders.filter(
-      (order) =>
-        order.status.toLowerCase() === "failed"
+      (order) => order.status.toLowerCase() === "failed"
     );
 
     if (failedOrders.length > 0) {
@@ -450,9 +407,7 @@ export default function AIInsightsPage() {
         icon: "⚠️",
         title: "Low-value transactions detected",
         description: `${lowValueOrders.length} successful transaction${
-          lowValueOrders.length > 1
-            ? "s"
-            : ""
+          lowValueOrders.length > 1 ? "s" : ""
         } below ₹100 may experience higher relative processing costs.`,
       });
     }
@@ -472,22 +427,15 @@ export default function AIInsightsPage() {
         sorted[sorted.length - 1].amount
       );
 
-      if (
-        previous > 0 &&
-        latest < previous
-      ) {
+      if (previous > 0 && latest < previous) {
         const drop =
-          ((previous - latest) /
-            previous) *
-          100;
+          ((previous - latest) / previous) * 100;
 
         if (drop >= 30) {
           result.push({
             type: "warning",
             icon: "📉",
-            title: `Transaction value dropped ${Math.round(
-              drop
-            )}%`,
+            title: `Transaction value dropped ${Math.round(drop)}%`,
             description: `The latest transaction was ₹${latest.toLocaleString(
               "en-IN"
             )}, compared with ₹${previous.toLocaleString(
@@ -508,10 +456,7 @@ export default function AIInsightsPage() {
       });
     }
 
-    if (
-      failedOrders.length === 0 &&
-      orders.length > 0
-    ) {
+    if (failedOrders.length === 0 && orders.length > 0) {
       result.push({
         type: "success",
         icon: "✅",
@@ -532,8 +477,7 @@ export default function AIInsightsPage() {
     const result: Action[] = [];
 
     const failedOrders = orders.filter(
-      (order) =>
-        order.status.toLowerCase() === "failed"
+      (order) => order.status.toLowerCase() === "failed"
     );
 
     const lowValueOrders = orders.filter(
@@ -591,9 +535,7 @@ export default function AIInsightsPage() {
         icon: "🛒",
         title: "Low-value orders detected",
         issue: `${lowValueOrders.length} successful order${
-          lowValueOrders.length > 1
-            ? "s"
-            : ""
+          lowValueOrders.length > 1 ? "s" : ""
         } below ₹100.`,
         recommendation:
           "Increase basket size so payment processing costs represent a smaller percentage of revenue.",
@@ -677,8 +619,7 @@ export default function AIInsightsPage() {
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
-      const searchValue =
-        search.toLowerCase();
+      const searchValue = search.toLowerCase();
 
       const matchesSearch =
         order.razorpay_order_id
@@ -699,16 +640,9 @@ export default function AIInsightsPage() {
         order.status?.toLowerCase() ===
           statusFilter.toLowerCase();
 
-      return (
-        matchesSearch &&
-        matchesStatus
-      );
+      return matchesSearch && matchesStatus;
     });
-  }, [
-    orders,
-    search,
-    statusFilter,
-  ]);
+  }, [orders, search, statusFilter]);
 
   // ==========================================================
   // LOADING
@@ -740,7 +674,6 @@ export default function AIInsightsPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
         <div className="w-full max-w-lg rounded-2xl border border-red-500/20 bg-slate-900 p-8 text-center">
-
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-red-500/10 text-2xl">
             ⚠️
           </div>
@@ -762,7 +695,6 @@ export default function AIInsightsPage() {
           >
             Try Again
           </button>
-
         </div>
       </main>
     );
@@ -772,17 +704,13 @@ export default function AIInsightsPage() {
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-10">
-
       <div className="mx-auto max-w-7xl">
 
         {/* HEADER */}
 
         <header className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-
           <div>
-
             <div className="mb-2 flex items-center gap-2">
-
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400">
                 ✦
               </span>
@@ -790,7 +718,6 @@ export default function AIInsightsPage() {
               <span className="text-sm font-medium text-cyan-400">
                 IntentCart Intelligence
               </span>
-
             </div>
 
             <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
@@ -800,7 +727,6 @@ export default function AIInsightsPage() {
             <p className="mt-2 text-sm text-slate-400 sm:text-base">
               Real-time financial intelligence powered by PostgreSQL, Razorpay and Gemini AI.
             </p>
-
           </div>
 
           <button
@@ -811,13 +737,7 @@ export default function AIInsightsPage() {
             disabled={refreshing}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-semibold hover:border-cyan-500/50 hover:bg-slate-800 disabled:opacity-60"
           >
-            <span
-              className={
-                refreshing
-                  ? "animate-spin"
-                  : ""
-              }
-            >
+            <span className={refreshing ? "animate-spin" : ""}>
               ↻
             </span>
 
@@ -825,13 +745,11 @@ export default function AIInsightsPage() {
               ? "Refreshing..."
               : "Refresh Dashboard"}
           </button>
-
         </header>
 
         {/* SYSTEM STATUS */}
 
         <section className="mb-6 grid gap-3 sm:grid-cols-3">
-
           <StatusCard
             title="Gemini AI"
             status="Online"
@@ -849,39 +767,31 @@ export default function AIInsightsPage() {
             status="Active"
             icon="₹"
           />
-
         </section>
 
         {/* LIVE */}
 
         <div className="mb-6 flex items-center justify-between rounded-xl border border-emerald-500/10 bg-emerald-500/5 px-4 py-3">
-
           <div className="flex items-center gap-2">
-
             <span className="relative flex h-2.5 w-2.5">
-
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
 
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400" />
-
             </span>
 
             <span className="text-xs font-medium text-emerald-300">
               Live transaction monitoring
             </span>
-
           </div>
 
           <span className="text-xs text-slate-500">
             Updates every 5 seconds
           </span>
-
         </div>
 
         {/* METRICS */}
 
         <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-
           <MetricCard
             title="Total Revenue"
             value={`₹${(
@@ -917,15 +827,12 @@ export default function AIInsightsPage() {
             description="Payment success rate"
             icon="✓"
           />
-
         </section>
 
         {/* RISK SCORE */}
 
         <section className="mb-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-
           <div className="border-b border-slate-800 px-6 py-5">
-
             <p className="text-xs font-semibold uppercase tracking-widest text-purple-400">
               Automated Financial Intelligence
             </p>
@@ -937,17 +844,12 @@ export default function AIInsightsPage() {
             <p className="mt-1 text-sm text-slate-400">
               Calculated from live transaction data
             </p>
-
           </div>
 
           <div className="grid gap-8 p-6 lg:grid-cols-[280px_1fr] lg:p-8">
-
             <div className="flex flex-col items-center justify-center">
-
               <div className="flex h-52 w-52 items-center justify-center rounded-full border-[18px] border-slate-800">
-
                 <div className="text-center">
-
                   <div
                     className={`text-5xl font-black ${
                       risk.score >= 70
@@ -963,9 +865,7 @@ export default function AIInsightsPage() {
                   <div className="mt-1 text-xs uppercase tracking-widest text-slate-500">
                     / 100
                   </div>
-
                 </div>
-
               </div>
 
               <div
@@ -983,11 +883,9 @@ export default function AIInsightsPage() {
               <p className="mt-3 max-w-xs text-center text-xs leading-5 text-slate-500">
                 {risk.description}
               </p>
-
             </div>
 
             <div>
-
               <RiskBar
                 title="Payment Health"
                 value={risk.paymentHealth}
@@ -1014,42 +912,28 @@ export default function AIInsightsPage() {
 
               {orders.length < 10 && (
                 <div className="mt-5 rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-
                   <p className="text-sm font-semibold text-amber-400">
                     ℹ️ Limited data confidence
                   </p>
 
                   <p className="mt-1 text-xs leading-5 text-slate-500">
                     Only {orders.length} transaction
-                    {orders.length !== 1
-                      ? "s"
-                      : ""}{" "}
-                    currently exist. Collect more payments for stronger financial analysis.
+                    {orders.length !== 1 ? "s" : ""} currently exist.
+                    Collect more payments for stronger financial analysis.
                   </p>
-
                 </div>
               )}
-
             </div>
-
           </div>
-
         </section>
 
-        {/* ==================================================
-            AI ACTION CENTER
-        ================================================== */}
+        {/* AI ACTION CENTER */}
 
         <section className="mb-8 overflow-hidden rounded-2xl border border-cyan-500/20 bg-slate-900">
-
           <div className="border-b border-slate-800 bg-cyan-500/[0.03] px-6 py-6">
-
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
               <div>
-
                 <div className="flex items-center gap-2">
-
                   <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400">
                     ✦
                   </span>
@@ -1057,7 +941,6 @@ export default function AIInsightsPage() {
                   <p className="text-xs font-semibold uppercase tracking-widest text-cyan-400">
                     Intelligent Decision Support
                   </p>
-
                 </div>
 
                 <h2 className="mt-3 text-2xl font-bold">
@@ -1067,11 +950,9 @@ export default function AIInsightsPage() {
                 <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
                   IntentCart converts live transaction signals into practical financial actions.
                 </p>
-
               </div>
 
               <div className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3">
-
                 <p className="text-xs text-slate-500">
                   Current Risk
                 </p>
@@ -1087,57 +968,36 @@ export default function AIInsightsPage() {
                 >
                   {risk.score}/100
                 </p>
-
               </div>
-
             </div>
-
           </div>
 
           <div className="p-5">
-
             {actions.length === 0 ? (
-
               <div className="rounded-xl border border-slate-800 bg-slate-950 p-8 text-center">
-
-                <div className="text-3xl">
-                  🎯
-                </div>
+                <div className="text-3xl">🎯</div>
 
                 <h3 className="mt-3 font-semibold">
                   No actions required
                 </h3>
-
               </div>
-
             ) : (
-
               <div className="grid gap-4 lg:grid-cols-2">
-
-                {actions.map(
-                  (action, index) => (
-                    <ActionCard
-                      key={`${action.title}-${index}`}
-                      action={action}
-                      onAction={() =>
-                        handleAction(action)
-                      }
-                    />
-                  )
-                )}
-
+                {actions.map((action, index) => (
+                  <ActionCard
+                    key={`${action.title}-${index}`}
+                    action={action}
+                    onAction={() => handleAction(action)}
+                  />
+                ))}
               </div>
-
             )}
-
           </div>
-
         </section>
 
         {/* CHARTS */}
 
         <section className="mb-8 grid gap-6 lg:grid-cols-2">
-
           <ChartCard
             title="Revenue Trend"
             subtitle="Successful payment revenue over time"
@@ -1150,7 +1010,6 @@ export default function AIInsightsPage() {
                 height="100%"
               >
                 <LineChart data={chartData}>
-
                   <CartesianGrid
                     strokeDasharray="3 3"
                     stroke="#334155"
@@ -1173,10 +1032,8 @@ export default function AIInsightsPage() {
 
                   <Tooltip
                     contentStyle={{
-                      backgroundColor:
-                        "#0f172a",
-                      border:
-                        "1px solid #334155",
+                      backgroundColor: "#0f172a",
+                      border: "1px solid #334155",
                       borderRadius: "10px",
                       color: "#fff",
                     }}
@@ -1202,7 +1059,6 @@ export default function AIInsightsPage() {
                     strokeDasharray="5 5"
                     dot={false}
                   />
-
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -1220,7 +1076,6 @@ export default function AIInsightsPage() {
                 height="100%"
               >
                 <LineChart data={chartData}>
-
                   <CartesianGrid
                     strokeDasharray="3 3"
                     stroke="#334155"
@@ -1243,10 +1098,8 @@ export default function AIInsightsPage() {
 
                   <Tooltip
                     contentStyle={{
-                      backgroundColor:
-                        "#0f172a",
-                      border:
-                        "1px solid #334155",
+                      backgroundColor: "#0f172a",
+                      border: "1px solid #334155",
                       borderRadius: "10px",
                       color: "#fff",
                     }}
@@ -1271,20 +1124,16 @@ export default function AIInsightsPage() {
                     strokeWidth={3}
                     dot={{ r: 5 }}
                   />
-
                 </LineChart>
               </ResponsiveContainer>
             )}
           </ChartCard>
-
         </section>
 
         {/* FINANCE ALERTS */}
 
         <section className="mb-8 rounded-2xl border border-slate-800 bg-slate-900">
-
           <div className="border-b border-slate-800 px-6 py-5">
-
             <p className="text-xs font-semibold uppercase tracking-widest text-amber-400">
               Automated Monitoring
             </p>
@@ -1296,30 +1145,22 @@ export default function AIInsightsPage() {
             <p className="mt-1 text-sm text-slate-400">
               Rule-based alerts from live transaction data
             </p>
-
           </div>
 
           <div className="grid gap-3 p-5">
-
-            {alerts.map(
-              (alert, index) => (
-                <AlertCard
-                  key={`${alert.title}-${index}`}
-                  alert={alert}
-                />
-              )
-            )}
-
+            {alerts.map((alert, index) => (
+              <AlertCard
+                key={`${alert.title}-${index}`}
+                alert={alert}
+              />
+            ))}
           </div>
-
         </section>
 
         {/* GEMINI AI */}
 
         <section className="mb-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
-
           <div className="border-b border-slate-800 px-6 py-5">
-
             <p className="text-xs font-semibold uppercase tracking-widest text-cyan-400">
               AI Recommendation Engine
             </p>
@@ -1327,18 +1168,12 @@ export default function AIInsightsPage() {
             <h2 className="mt-1 text-xl font-bold">
               Gemini Transaction Intelligence
             </h2>
-
           </div>
 
           <div className="px-6 py-8 sm:px-10">
-
             {data?.quotaExceeded ? (
-
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-6">
-
-                <div className="text-2xl">
-                  ⏳
-                </div>
+                <div className="text-2xl">⏳</div>
 
                 <h3 className="mt-3 text-lg font-semibold">
                   Gemini free-tier limit reached
@@ -1350,7 +1185,6 @@ export default function AIInsightsPage() {
 
                 {data.insights && (
                   <div className="mt-6 border-t border-amber-500/10 pt-6">
-
                     <p className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
                       Last saved analysis
                     </p>
@@ -1360,38 +1194,26 @@ export default function AIInsightsPage() {
                         {data.insights}
                       </ReactMarkdown>
                     </article>
-
                   </div>
                 )}
-
               </div>
-
             ) : (
-
               <article className="ai-markdown">
                 <ReactMarkdown>
-                  {data?.insights ||
-                    "No AI analysis available."}
+                  {data?.insights || "No AI analysis available."}
                 </ReactMarkdown>
               </article>
-
             )}
-
           </div>
-
         </section>
 
-        {/* ==================================================
-            TRANSACTIONS
-        ================================================== */}
+        {/* TRANSACTIONS */}
 
         <section
           id="transactions"
           className="scroll-mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900"
         >
-
           <div className="border-b border-slate-800 px-6 py-5">
-
             <p className="text-xs font-semibold uppercase tracking-widest text-cyan-400">
               Payment Ledger
             </p>
@@ -1403,13 +1225,10 @@ export default function AIInsightsPage() {
             <p className="mt-1 text-sm text-slate-400">
               Live transactions from PostgreSQL
             </p>
-
           </div>
 
           <div className="border-b border-slate-800 p-5">
-
             <div className="grid gap-3 md:grid-cols-[1fr_180px]">
-
               <input
                 type="text"
                 value={search}
@@ -1427,7 +1246,6 @@ export default function AIInsightsPage() {
                 }
                 className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-500/50"
               >
-
                 <option value="all">
                   All statuses
                 </option>
@@ -1443,17 +1261,12 @@ export default function AIInsightsPage() {
                 <option value="failed">
                   Failed
                 </option>
-
               </select>
-
             </div>
-
           </div>
 
           {filteredOrders.length === 0 ? (
-
             <div className="px-6 py-14 text-center">
-
               <h3 className="font-semibold">
                 No transactions found
               </h3>
@@ -1461,19 +1274,12 @@ export default function AIInsightsPage() {
               <p className="mt-2 text-sm text-slate-500">
                 Try changing your search or status filter.
               </p>
-
             </div>
-
           ) : (
-
             <div className="overflow-x-auto">
-
               <table className="w-full min-w-[800px] text-left">
-
                 <thead>
-
                   <tr className="border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500">
-
                     <th className="px-6 py-4">
                       Transaction
                     </th>
@@ -1493,123 +1299,102 @@ export default function AIInsightsPage() {
                     <th className="px-6 py-4">
                       Date
                     </th>
-
                   </tr>
-
                 </thead>
 
                 <tbody>
+                  {filteredOrders.map((order) => (
+                    <tr
+                      key={order.id}
+                      onClick={() =>
+                        (window.location.href =
+                          `/order/${order.id}`)
+                      }
+                      className="cursor-pointer border-b border-slate-800/70 transition hover:bg-slate-800/30"
+                    >
+                      <td className="px-6 py-5">
+                        <p className="font-semibold">
+                          #{order.id}
+                        </p>
 
-                  {filteredOrders.map(
-                    (order) => (
-                      <tr
-                        key={order.id}
-                        className="border-b border-slate-800/70 hover:bg-slate-800/30"
-                      >
+                        <p className="mt-1 max-w-[220px] truncate text-xs text-slate-500">
+                          {order.razorpay_order_id}
+                        </p>
+                      </td>
 
-                        <td className="px-6 py-5">
+                      <td className="px-6 py-5">
+                        <p className="max-w-[220px] truncate text-xs text-slate-400">
+                          {order.razorpay_payment_id ||
+                            "Not available"}
+                        </p>
+                      </td>
 
-                          <p className="font-semibold">
-                            #{order.id}
-                          </p>
+                      <td className="px-6 py-5">
+                        <p className="font-semibold">
+                          ₹
+                          {Number(
+                            order.amount
+                          ).toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </p>
 
-                          <p className="mt-1 max-w-[220px] truncate text-xs text-slate-500">
-                            {
-                              order.razorpay_order_id
-                            }
-                          </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {order.currency}
+                        </p>
+                      </td>
 
-                        </td>
+                      <td className="px-6 py-5">
+                        <StatusBadge
+                          status={order.status}
+                        />
+                      </td>
 
-                        <td className="px-6 py-5">
+                      <td className="px-6 py-5">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm text-slate-300">
+                              {new Date(
+                                order.created_at
+                              ).toLocaleDateString(
+                                "en-IN"
+                              )}
+                            </p>
 
-                          <p className="max-w-[220px] truncate text-xs text-slate-400">
-                            {
-                              order.razorpay_payment_id ||
-                              "Not available"
-                            }
-                          </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {new Date(
+                                order.created_at
+                              ).toLocaleTimeString(
+                                "en-IN",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </p>
+                          </div>
 
-                        </td>
-
-                        <td className="px-6 py-5">
-
-                          <p className="font-semibold">
-                            ₹
-                            {Number(
-                              order.amount
-                            ).toLocaleString(
-                              "en-IN",
-                              {
-                                minimumFractionDigits: 2,
-                              }
-                            )}
-                          </p>
-
-                          <p className="mt-1 text-xs text-slate-500">
-                            {order.currency}
-                          </p>
-
-                        </td>
-
-                        <td className="px-6 py-5">
-
-                          <StatusBadge
-                            status={
-                              order.status
-                            }
-                          />
-
-                        </td>
-
-                        <td className="px-6 py-5">
-
-                          <p className="text-sm text-slate-300">
-                            {new Date(
-                              order.created_at
-                            ).toLocaleDateString(
-                              "en-IN"
-                            )}
-                          </p>
-
-                          <p className="mt-1 text-xs text-slate-500">
-                            {new Date(
-                              order.created_at
-                            ).toLocaleTimeString(
-                              "en-IN",
-                              {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              }
-                            )}
-                          </p>
-
-                        </td>
-
-                      </tr>
-                    )
-                  )}
-
+                          <span className="text-sm font-semibold text-cyan-400">
+                            →
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
-
               </table>
-
             </div>
-
           )}
-
         </section>
 
         <footer className="mt-8 border-t border-slate-800 pt-6 text-center text-xs text-slate-500">
           IntentCart AI Finance Controller • Live PostgreSQL Intelligence
         </footer>
-
       </div>
 
       {/* MARKDOWN */}
 
       <style jsx global>{`
-
         .ai-markdown {
           color: #cbd5e1;
           font-size: 0.95rem;
@@ -1679,9 +1464,7 @@ export default function AIInsightsPage() {
           font-size: 0.85em;
           color: #67e8f9;
         }
-
       `}</style>
-
     </main>
   );
 }
@@ -1701,15 +1484,12 @@ function StatusCard({
 }) {
   return (
     <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 px-5 py-4">
-
       <div className="flex items-center gap-3">
-
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-800 text-cyan-400">
           {icon}
         </div>
 
         <div>
-
           <p className="text-sm font-semibold">
             {title}
           </p>
@@ -1717,19 +1497,14 @@ function StatusCard({
           <p className="text-xs text-slate-500">
             Current system status
           </p>
-
         </div>
-
       </div>
 
       <div className="flex items-center gap-2 text-xs font-medium text-emerald-400">
-
         <span className="h-2 w-2 rounded-full bg-emerald-400" />
 
         {status}
-
       </div>
-
     </div>
   );
 }
@@ -1751,11 +1526,8 @@ function MetricCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-
       <div className="flex items-start justify-between">
-
         <div>
-
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
             {title}
           </p>
@@ -1763,19 +1535,16 @@ function MetricCard({
           <p className="mt-3 text-2xl font-bold">
             {value}
           </p>
-
         </div>
 
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-400">
           {icon}
         </div>
-
       </div>
 
       <p className="mt-3 text-xs text-slate-500">
         {description}
       </p>
-
     </div>
   );
 }
@@ -1795,11 +1564,8 @@ function RiskBar({
 }) {
   return (
     <div className="mb-6">
-
       <div className="mb-2 flex items-center justify-between">
-
         <div>
-
           <p className="text-sm font-semibold text-slate-200">
             {title}
           </p>
@@ -1807,17 +1573,14 @@ function RiskBar({
           <p className="text-xs text-slate-500">
             {description}
           </p>
-
         </div>
 
         <span className="text-sm font-bold">
           {value}%
         </span>
-
       </div>
 
       <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-
         <div
           className={`h-full rounded-full transition-all ${
             value >= 70
@@ -1830,9 +1593,7 @@ function RiskBar({
             width: `${value}%`,
           }}
         />
-
       </div>
-
     </div>
   );
 }
@@ -1857,17 +1618,13 @@ function ActionCard({
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-950 p-5 transition hover:border-slate-700">
-
       <div className="flex items-start justify-between gap-4">
-
         <div className="flex items-center gap-3">
-
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-xl">
             {action.icon}
           </div>
 
           <div>
-
             <h3 className="font-bold">
               {action.title}
             </h3>
@@ -1875,9 +1632,7 @@ function ActionCard({
             <p className="mt-1 text-xs text-slate-500">
               AI-detected financial signal
             </p>
-
           </div>
-
         </div>
 
         <span
@@ -1885,13 +1640,10 @@ function ActionCard({
         >
           {action.priority}
         </span>
-
       </div>
 
       <div className="mt-5 space-y-4">
-
         <div>
-
           <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-600">
             Issue
           </p>
@@ -1899,11 +1651,9 @@ function ActionCard({
           <p className="text-sm leading-6 text-slate-400">
             {action.issue}
           </p>
-
         </div>
 
         <div>
-
           <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-cyan-500">
             Recommendation
           </p>
@@ -1911,11 +1661,9 @@ function ActionCard({
           <p className="text-sm leading-6 text-slate-300">
             {action.recommendation}
           </p>
-
         </div>
 
         <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
-
           <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-emerald-500">
             Suggested Action
           </p>
@@ -1930,11 +1678,8 @@ function ActionCard({
           >
             View Transactions →
           </button>
-
         </div>
-
       </div>
-
     </div>
   );
 }
@@ -1954,9 +1699,7 @@ function ChartCard({
 }) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-
       <div className="mb-6">
-
         <p className="text-xs font-semibold uppercase tracking-widest text-cyan-400">
           Analytics
         </p>
@@ -1968,13 +1711,11 @@ function ChartCard({
         <p className="mt-1 text-sm text-slate-500">
           {subtitle}
         </p>
-
       </div>
 
       <div className="h-[300px] w-full">
         {children}
       </div>
-
     </div>
   );
 }
@@ -2015,15 +1756,12 @@ function AlertCard({
     <div
       className={`rounded-xl border p-4 ${styles[alert.type]}`}
     >
-
       <div className="flex gap-4">
-
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-950/50 text-lg">
           {alert.icon}
         </div>
 
         <div>
-
           <h3 className="font-semibold">
             {alert.title}
           </h3>
@@ -2031,11 +1769,8 @@ function AlertCard({
           <p className="mt-1 text-sm leading-6 text-slate-400">
             {alert.description}
           </p>
-
         </div>
-
       </div>
-
     </div>
   );
 }
@@ -2049,17 +1784,13 @@ function StatusBadge({
 }: {
   status: string;
 }) {
-  const normalized =
-    status.toLowerCase();
+  const normalized = status.toLowerCase();
 
   if (normalized === "paid") {
     return (
       <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-400">
-
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-
         Paid
-
       </span>
     );
   }
@@ -2067,22 +1798,16 @@ function StatusBadge({
   if (normalized === "failed") {
     return (
       <span className="inline-flex items-center gap-2 rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400">
-
         <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
-
         Failed
-
       </span>
     );
   }
 
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-400">
-
       <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-
       {status}
-
     </span>
   );
 }

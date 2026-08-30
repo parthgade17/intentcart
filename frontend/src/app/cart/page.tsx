@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -41,16 +42,21 @@ export default function CartPage() {
 
   useEffect(() => {
     try {
-      const savedCart = localStorage.getItem("intentcart_cart");
+      const savedCart =
+        localStorage.getItem("intentcart_cart");
 
-      if (savedCart) {
-        const parsedCart = JSON.parse(savedCart);
+      if (!savedCart) {
+        setCart([]);
+        setLoaded(true);
+        return;
+      }
 
-        if (Array.isArray(parsedCart)) {
-          setCart(parsedCart);
-        } else {
-          setCart([]);
-        }
+      const parsed = JSON.parse(savedCart);
+
+      if (Array.isArray(parsed)) {
+        setCart(parsed);
+      } else {
+        setCart([]);
       }
     } catch (error) {
       console.error("Cart loading error:", error);
@@ -61,13 +67,28 @@ export default function CartPage() {
   }, []);
 
   // ==========================================
-  // UPDATE CART
+  // SAVE CART
   // ==========================================
 
-  const updateCart = (
+  const saveCart = (updatedCart: CartItem[]) => {
+    setCart(updatedCart);
+
+    localStorage.setItem(
+      "intentcart_cart",
+      JSON.stringify(updatedCart)
+    );
+  };
+
+  // ==========================================
+  // UPDATE QUANTITY
+  // ==========================================
+
+  const updateQuantity = (
     productId: number,
     quantity: number
   ) => {
+    if (loading) return;
+
     if (quantity <= 0) {
       removeItem(productId);
       return;
@@ -82,12 +103,7 @@ export default function CartPage() {
         : item
     );
 
-    setCart(updatedCart);
-
-    localStorage.setItem(
-      "intentcart_cart",
-      JSON.stringify(updatedCart)
-    );
+    saveCart(updatedCart);
   };
 
   // ==========================================
@@ -95,16 +111,13 @@ export default function CartPage() {
   // ==========================================
 
   const removeItem = (productId: number) => {
+    if (loading) return;
+
     const updatedCart = cart.filter(
       (item) => item.id !== productId
     );
 
-    setCart(updatedCart);
-
-    localStorage.setItem(
-      "intentcart_cart",
-      JSON.stringify(updatedCart)
-    );
+    saveCart(updatedCart);
   };
 
   // ==========================================
@@ -112,13 +125,13 @@ export default function CartPage() {
   // ==========================================
 
   const clearCart = () => {
-    if (loading) {
-      return;
-    }
+    if (loading) return;
 
     setCart([]);
 
-    localStorage.removeItem("intentcart_cart");
+    localStorage.removeItem(
+      "intentcart_cart"
+    );
   };
 
   // ==========================================
@@ -127,7 +140,8 @@ export default function CartPage() {
 
   const totalItems = useMemo(() => {
     return cart.reduce(
-      (total, item) => total + item.quantity,
+      (total, item) =>
+        total + Number(item.quantity),
       0
     );
   }, [cart]);
@@ -139,7 +153,9 @@ export default function CartPage() {
   const subtotal = useMemo(() => {
     return cart.reduce(
       (total, item) =>
-        total + Number(item.price) * item.quantity,
+        total +
+        Number(item.price) *
+          Number(item.quantity),
       0
     );
   }, [cart]);
@@ -148,7 +164,8 @@ export default function CartPage() {
   // DELIVERY
   // ==========================================
 
-  const delivery = subtotal >= 1000 ? 0 : 49;
+  const delivery =
+    subtotal >= 1000 ? 0 : 49;
 
   // ==========================================
   // TOTAL
@@ -160,8 +177,8 @@ export default function CartPage() {
   // LOAD RAZORPAY
   // ==========================================
 
-  const loadRazorpay = () => {
-    return new Promise<boolean>((resolve) => {
+  const loadRazorpay = (): Promise<boolean> => {
+    return new Promise((resolve) => {
       if (typeof window === "undefined") {
         resolve(false);
         return;
@@ -172,36 +189,41 @@ export default function CartPage() {
         return;
       }
 
-      const existingScript = document.querySelector(
-        'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
-      );
+      const scriptId =
+        "razorpay-checkout-script";
+
+      const existingScript =
+        document.getElementById(scriptId);
 
       if (existingScript) {
-        existingScript.addEventListener("load", () => {
-          resolve(true);
-        });
+        existingScript.addEventListener(
+          "load",
+          () => resolve(true)
+        );
 
-        existingScript.addEventListener("error", () => {
-          resolve(false);
-        });
+        existingScript.addEventListener(
+          "error",
+          () => resolve(false)
+        );
 
         return;
       }
 
-      const script = document.createElement("script");
+      const script =
+        document.createElement("script");
+
+      script.id = scriptId;
 
       script.src =
         "https://checkout.razorpay.com/v1/checkout.js";
 
       script.async = true;
 
-      script.onload = () => {
+      script.onload = () =>
         resolve(true);
-      };
 
-      script.onerror = () => {
+      script.onerror = () =>
         resolve(false);
-      };
 
       document.body.appendChild(script);
     });
@@ -213,28 +235,29 @@ export default function CartPage() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) {
-      setMessage("Your cart is empty.");
+      setMessage(
+        "Your cart is empty."
+      );
       return;
     }
 
-    if (loading) {
-      return;
-    }
+    if (loading) return;
 
     setLoading(true);
     setMessage("");
 
     try {
       // ========================================
-      // CHECK RAZORPAY KEY
+      // RAZORPAY KEY
       // ========================================
 
       const razorpayKey =
-        process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID;
+        process.env
+          .NEXT_PUBLIC_RAZORPAY_KEY_ID;
 
       if (!razorpayKey) {
         throw new Error(
-          "Razorpay key is missing. Check NEXT_PUBLIC_RAZORPAY_KEY_ID in frontend/.env.local."
+          "Razorpay key is missing. Check frontend/.env.local."
         );
       }
 
@@ -242,7 +265,9 @@ export default function CartPage() {
       // LOAD RAZORPAY
       // ========================================
 
-      setMessage("Loading secure payment...");
+      setMessage(
+        "Loading secure payment..."
+      );
 
       const razorpayLoaded =
         await loadRazorpay();
@@ -254,53 +279,67 @@ export default function CartPage() {
       }
 
       // ========================================
-      // PREPARE CART ITEMS
+      // PREPARE ITEMS
       // ========================================
 
-      const orderItems = cart.map((item) => ({
-        id: Number(item.id),
-        name: String(item.name),
-        category: item.category
-          ? String(item.category)
-          : "",
-        price: Number(item.price),
-        quantity: Number(item.quantity),
-        emoji: item.emoji
-          ? String(item.emoji)
-          : "",
-      }));
-
-      // ========================================
-      // CREATE BACKEND ORDER
-      // ========================================
-
-      setMessage("Creating your order...");
-
-      const orderResponse = await fetch(
-        "http://localhost:5000/api/create-order",
-        {
-          method: "POST",
-
-          headers: {
-            "Content-Type": "application/json",
-          },
-
-          body: JSON.stringify({
-            amount: total,
-            items: orderItems,
-          }),
-        }
+      const orderItems = cart.map(
+        (item) => ({
+          id: Number(item.id),
+          name: String(item.name),
+          category: String(
+            item.category || ""
+          ),
+          price: Number(item.price),
+          quantity: Number(
+            item.quantity
+          ),
+          emoji: String(
+            item.emoji || ""
+          ),
+        })
       );
+
+      // ========================================
+      // CREATE ORDER
+      // ========================================
+
+      setMessage(
+        "Creating your order..."
+      );
+
+      const orderResponse =
+        await fetch(
+          "http://localhost:5000/api/create-order",
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              amount: total,
+              items: orderItems,
+            }),
+          }
+        );
 
       let orderData: any;
 
       try {
-        orderData = await orderResponse.json();
+        orderData =
+          await orderResponse.json();
       } catch {
         throw new Error(
           "Backend returned an invalid response."
         );
       }
+
+      console.log(
+        "CREATE ORDER RESPONSE:",
+        orderData
+      );
 
       if (
         !orderResponse.ok ||
@@ -309,14 +348,29 @@ export default function CartPage() {
       ) {
         throw new Error(
           orderData?.error ||
-            "Failed to create Razorpay order."
+            orderData?.message ||
+            "Failed to create order."
         );
       }
 
+      // ========================================
+      // IMPORTANT
+      // DATABASE ORDER ID
+      // ========================================
+
+      const databaseOrderId =
+        orderData.order.id;
+
       console.log(
-        "Backend order created:",
-        orderData
+        "DATABASE ORDER ID:",
+        databaseOrderId
       );
+
+      if (!databaseOrderId) {
+        throw new Error(
+          "Backend did not return the database order ID."
+        );
+      }
 
       // ========================================
       // RAZORPAY OPTIONS
@@ -329,7 +383,8 @@ export default function CartPage() {
           orderData.order.amount,
 
         currency:
-          orderData.order.currency || "INR",
+          orderData.order.currency ||
+          "INR",
 
         name: "IntentCart",
 
@@ -337,198 +392,201 @@ export default function CartPage() {
           "IntentCart Shopping Order",
 
         order_id:
-          orderData.order.razorpay_order_id,
+          orderData.order
+            .razorpay_order_id,
 
         theme: {
           color: "#06b6d4",
         },
 
-        // ======================================
-        // PAYMENT SUCCESS
-        // ======================================
-
-        handler: async function (
-          response: RazorpayResponse
-        ) {
-          try {
-            setMessage(
-              "Payment successful. Verifying payment..."
-            );
-
-            console.log(
-              "Razorpay payment response:",
-              response
-            );
-
-            // ==================================
-            // VERIFY PAYMENT
-            // ==================================
-
-            const verifyResponse =
-              await fetch(
-                "http://localhost:5000/api/verify-payment",
-                {
-                  method: "POST",
-
-                  headers: {
-                    "Content-Type":
-                      "application/json",
-                  },
-
-                  body: JSON.stringify({
-                    razorpay_order_id:
-                      response.razorpay_order_id,
-
-                    razorpay_payment_id:
-                      response.razorpay_payment_id,
-
-                    razorpay_signature:
-                      response.razorpay_signature,
-                  }),
-                }
-              );
-
-            let verifyData: any;
-
+        handler:
+          async function (
+            response: RazorpayResponse
+          ) {
             try {
-              verifyData =
-                await verifyResponse.json();
-            } catch {
-              throw new Error(
-                "Invalid response from payment verification server."
+              setMessage(
+                "Payment successful. Verifying payment..."
               );
-            }
 
-            console.log(
-              "Payment verification response:",
-              verifyData
-            );
-
-            if (
-              !verifyResponse.ok ||
-              !verifyData.success ||
-              !verifyData.order
-            ) {
-              throw new Error(
-                verifyData?.error ||
-                  "Payment verification failed."
+              console.log(
+                "RAZORPAY RESPONSE:",
+                response
               );
-            }
 
-            // ==================================
-            // USE ITEMS FROM DATABASE
-            // ==================================
+              // ==================================
+              // VERIFY PAYMENT
+              // ==================================
 
-            const purchasedItems =
-              Array.isArray(
-                verifyData.items
-              )
-                ? verifyData.items
-                : orderItems;
+              const verifyResponse =
+                await fetch(
+                  "http://localhost:5000/api/verify-payment",
+                  {
+                    method: "POST",
 
-            // ==================================
-            // SAVE PAYMENT DETAILS
-            // ==================================
+                    headers: {
+                      "Content-Type":
+                        "application/json",
+                    },
 
-            const paymentDetails = {
-              databaseOrderId:
-                verifyData.order.id,
+                    body: JSON.stringify({
+                      razorpay_order_id:
+                        response.razorpay_order_id,
 
-              razorpayOrderId:
-                response.razorpay_order_id,
+                      razorpay_payment_id:
+                        response.razorpay_payment_id,
 
-              razorpayPaymentId:
-                response.razorpay_payment_id,
+                      razorpay_signature:
+                        response.razorpay_signature,
+                    }),
+                  }
+                );
 
-              amount:
-                Number(
-                  verifyData.order.amount
-                ),
+              let verifyData: any;
 
-              currency:
-                verifyData.order.currency ||
-                "INR",
+              try {
+                verifyData =
+                  await verifyResponse.json();
+              } catch {
+                throw new Error(
+                  "Invalid response from payment verification server."
+                );
+              }
 
-              status:
-                verifyData.order.status ||
-                "paid",
+              console.log(
+                "VERIFY PAYMENT RESPONSE:",
+                verifyData
+              );
 
-              items:
-                purchasedItems,
+              if (
+                !verifyResponse.ok ||
+                !verifyData.success
+              ) {
+                throw new Error(
+                  verifyData?.error ||
+                    verifyData?.message ||
+                    "Payment verification failed."
+                );
+              }
 
-              paidAt:
-                new Date().toISOString(),
-            };
+              // ==================================
+              // GET FINAL DATABASE ORDER ID
+              // ==================================
 
-            localStorage.setItem(
-              "intentcart_last_payment",
-              JSON.stringify(
+              const finalOrderId =
+                verifyData?.order?.id ||
+                databaseOrderId;
+
+              console.log(
+                "FINAL DATABASE ORDER ID:",
+                finalOrderId
+              );
+
+              if (!finalOrderId) {
+                throw new Error(
+                  "Payment succeeded but database order ID was not returned."
+                );
+              }
+
+              // ==================================
+              // PURCHASED ITEMS
+              // ==================================
+
+              const purchasedItems =
+                Array.isArray(
+                  verifyData.items
+                )
+                  ? verifyData.items
+                  : orderItems;
+
+              // ==================================
+              // SAVE PAYMENT DETAILS
+              // ==================================
+
+              const paymentDetails = {
+                databaseOrderId:
+                  Number(finalOrderId),
+
+                razorpayOrderId:
+                  response.razorpay_order_id,
+
+                razorpayPaymentId:
+                  response.razorpay_payment_id,
+
+                amount:
+                  Number(
+                    verifyData?.order
+                      ?.amount ||
+                      orderData.order.amount
+                  ),
+
+                currency:
+                  verifyData?.order
+                    ?.currency ||
+                  orderData.order.currency ||
+                  "INR",
+
+                status:
+                  verifyData?.order
+                    ?.status ||
+                  "paid",
+
+                items:
+                  purchasedItems,
+
+                paidAt:
+                  new Date().toISOString(),
+              };
+
+              localStorage.setItem(
+                "intentcart_last_payment",
+                JSON.stringify(
+                  paymentDetails
+                )
+              );
+
+              console.log(
+                "PAYMENT SAVED:",
                 paymentDetails
-              )
-            );
-
-            console.log(
-              "Payment details saved:",
-              paymentDetails
-            );
-
-            console.log(
-              "Database order:",
-              verifyData.order
-            );
-
-            console.log(
-              "Purchased items:",
-              purchasedItems
-            );
-
-            // ==================================
-            // CLEAR CART
-            // ==================================
-
-            localStorage.removeItem(
-              "intentcart_cart"
-            );
-
-            setCart([]);
-
-            // ==================================
-            // SUCCESS MESSAGE
-            // ==================================
-
-            setMessage(
-              "Payment successful! Your order has been confirmed."
-            );
-
-            // ==================================
-            // REDIRECT
-            // ==================================
-
-            setTimeout(() => {
-              router.push(
-                "/payment-success"
               );
-            }, 700);
 
-          } catch (error) {
-            console.error(
-              "Payment verification error:",
-              error
-            );
+              // ==================================
+              // CLEAR CART
+              // ==================================
 
-            setLoading(false);
+              localStorage.removeItem(
+                "intentcart_cart"
+              );
 
-            setMessage(
-              error instanceof Error
-                ? error.message
-                : "Payment verification failed."
-            );
-          }
-        },
+              setCart([]);
 
-        // ======================================
-        // PAYMENT MODAL
-        // ======================================
+              setMessage(
+                "Payment successful! Your order has been confirmed."
+              );
+
+              // ==================================
+              // REDIRECT WITH ORDER ID
+              // ==================================
+
+              setTimeout(() => {
+                router.push(
+                  `/payment-success?id=${finalOrderId}`
+                );
+              }, 700);
+            } catch (error) {
+              console.error(
+                "Payment verification error:",
+                error
+              );
+
+              setLoading(false);
+
+              setMessage(
+                error instanceof Error
+                  ? error.message
+                  : "Payment verification failed."
+              );
+            }
+          },
 
         modal: {
           ondismiss: () => {
@@ -546,17 +604,15 @@ export default function CartPage() {
       // ========================================
 
       const razorpay =
-        new window.Razorpay(options);
-
-      // ========================================
-      // PAYMENT FAILED
-      // ========================================
+        new window.Razorpay(
+          options
+        );
 
       razorpay.on(
         "payment.failed",
         (response: any) => {
           console.error(
-            "Razorpay payment failed:",
+            "Payment failed:",
             response
           );
 
@@ -570,12 +626,7 @@ export default function CartPage() {
         }
       );
 
-      // ========================================
-      // OPEN CHECKOUT
-      // ========================================
-
       razorpay.open();
-
     } catch (error) {
       console.error(
         "Checkout error:",
@@ -593,15 +644,15 @@ export default function CartPage() {
   };
 
   // ==========================================
-  // LOADING
+  // LOADING SCREEN
   // ==========================================
 
   if (!loaded) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
-        <div className="text-sm text-slate-500">
+        <p className="text-sm text-slate-500">
           Loading cart...
-        </div>
+        </p>
       </main>
     );
   }
@@ -625,13 +676,11 @@ export default function CartPage() {
             }
             className="flex items-center gap-3"
           >
-
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500 text-lg font-black text-slate-950">
               I
             </div>
 
             <div className="text-left">
-
               <h1 className="text-lg font-bold">
                 IntentCart
               </h1>
@@ -639,16 +688,14 @@ export default function CartPage() {
               <p className="text-[10px] uppercase tracking-widest text-slate-500">
                 Smart Commerce
               </p>
-
             </div>
-
           </button>
 
           <button
             onClick={() =>
               router.push("/products")
             }
-            className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold transition hover:border-cyan-500/50 hover:bg-slate-800"
+            className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold hover:border-cyan-500/50 hover:bg-slate-800"
           >
             🛍️ Continue Shopping
           </button>
@@ -657,7 +704,7 @@ export default function CartPage() {
 
       </nav>
 
-      {/* PAGE */}
+      {/* CONTENT */}
 
       <section className="mx-auto max-w-7xl px-5 py-10 sm:py-14">
 
@@ -672,10 +719,10 @@ export default function CartPage() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            {totalItems} item
-            {totalItems !== 1
-              ? "s"
-              : ""}{" "}
+            {totalItems}{" "}
+            {totalItems === 1
+              ? "item"
+              : "items"}{" "}
             in your cart
           </p>
 
@@ -692,7 +739,6 @@ export default function CartPage() {
         {/* EMPTY CART */}
 
         {cart.length === 0 ? (
-
           <div className="rounded-3xl border border-slate-800 bg-slate-900 px-6 py-20 text-center">
 
             <div className="text-7xl">
@@ -713,15 +759,13 @@ export default function CartPage() {
               onClick={() =>
                 router.push("/products")
               }
-              className="mt-7 rounded-xl bg-cyan-500 px-6 py-3.5 text-sm font-bold text-slate-950 transition hover:bg-cyan-400"
+              className="mt-7 rounded-xl bg-cyan-500 px-6 py-3.5 text-sm font-bold text-slate-950 hover:bg-cyan-400"
             >
               🛍️ Browse Products
             </button>
 
           </div>
-
         ) : (
-
           <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
 
             {/* CART ITEMS */}
@@ -737,7 +781,7 @@ export default function CartPage() {
                 <button
                   onClick={clearCart}
                   disabled={loading}
-                  className="text-xs font-semibold text-red-400 transition hover:text-red-300 disabled:opacity-50"
+                  className="text-xs font-semibold text-red-400 hover:text-red-300 disabled:opacity-50"
                 >
                   Clear Cart
                 </button>
@@ -745,7 +789,6 @@ export default function CartPage() {
               </div>
 
               {cart.map((item) => (
-
                 <div
                   key={item.id}
                   className="rounded-2xl border border-slate-800 bg-slate-900 p-5"
@@ -753,7 +796,7 @@ export default function CartPage() {
 
                   <div className="flex gap-5">
 
-                    {/* PRODUCT ICON */}
+                    {/* ICON */}
 
                     <button
                       onClick={() =>
@@ -761,7 +804,7 @@ export default function CartPage() {
                           `/products/${item.id}`
                         )
                       }
-                      className="flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-5xl transition hover:bg-slate-700"
+                      className="flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-5xl hover:bg-slate-700"
                     >
                       {item.emoji}
                     </button>
@@ -784,7 +827,7 @@ export default function CartPage() {
                                 `/products/${item.id}`
                               )
                             }
-                            className="mt-1 text-left text-lg font-bold transition hover:text-cyan-400"
+                            className="mt-1 text-left text-lg font-bold hover:text-cyan-400"
                           >
                             {item.name}
                           </button>
@@ -801,7 +844,7 @@ export default function CartPage() {
                             removeItem(item.id)
                           }
                           disabled={loading}
-                          className="text-xs font-semibold text-slate-600 transition hover:text-red-400 disabled:opacity-50"
+                          className="text-xs font-semibold text-slate-600 hover:text-red-400 disabled:opacity-50"
                         >
                           Remove
                         </button>
@@ -816,7 +859,7 @@ export default function CartPage() {
 
                           <button
                             onClick={() =>
-                              updateCart(
+                              updateQuantity(
                                 item.id,
                                 item.quantity - 1
                               )
@@ -833,7 +876,7 @@ export default function CartPage() {
 
                           <button
                             onClick={() =>
-                              updateCart(
+                              updateQuantity(
                                 item.id,
                                 item.quantity + 1
                               )
@@ -853,8 +896,12 @@ export default function CartPage() {
                           <p className="text-lg font-black">
                             ₹
                             {(
-                              Number(item.price) *
-                              item.quantity
+                              Number(
+                                item.price
+                              ) *
+                              Number(
+                                item.quantity
+                              )
                             ).toLocaleString(
                               "en-IN"
                             )}
@@ -881,7 +928,6 @@ export default function CartPage() {
                   </div>
 
                 </div>
-
               ))}
 
             </div>
@@ -898,8 +944,6 @@ export default function CartPage() {
 
                 <div className="mt-6 space-y-4">
 
-                  {/* SUBTOTAL */}
-
                   <div className="flex justify-between text-sm">
 
                     <span className="text-slate-500">
@@ -914,8 +958,6 @@ export default function CartPage() {
                     </span>
 
                   </div>
-
-                  {/* DELIVERY */}
 
                   <div className="flex justify-between text-sm">
 
@@ -937,15 +979,11 @@ export default function CartPage() {
 
                   </div>
 
-                  {/* FREE DELIVERY */}
-
                   {delivery === 0 && (
                     <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-400">
                       🎉 You unlocked free delivery!
                     </div>
                   )}
-
-                  {/* TOTAL */}
 
                   <div className="border-t border-slate-800 pt-4">
 
@@ -973,21 +1011,19 @@ export default function CartPage() {
                 <button
                   onClick={handleCheckout}
                   disabled={loading}
-                  className="mt-6 w-full rounded-xl bg-cyan-500 px-5 py-4 text-sm font-bold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-6 w-full rounded-xl bg-cyan-500 px-5 py-4 text-sm font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {loading
                     ? "Processing..."
                     : "💳 Proceed to Checkout"}
                 </button>
 
-                {/* CONTINUE SHOPPING */}
-
                 <button
                   onClick={() =>
                     router.push("/products")
                   }
                   disabled={loading}
-                  className="mt-3 w-full rounded-xl border border-slate-700 bg-slate-950 px-5 py-3.5 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                  className="mt-3 w-full rounded-xl border border-slate-700 bg-slate-950 px-5 py-3.5 text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-50"
                 >
                   Continue Shopping
                 </button>
@@ -1023,7 +1059,6 @@ export default function CartPage() {
             </aside>
 
           </div>
-
         )}
 
       </section>
@@ -1049,3 +1084,4 @@ export default function CartPage() {
     </main>
   );
 }
+

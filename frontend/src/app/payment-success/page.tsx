@@ -1,23 +1,22 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 
-type PaymentDetails = {
-  orderId: string;
-  paymentId: string;
-  amount: number;
-  currency: string;
-  status: string;
-  paidAt: string;
+type PaymentData = {
+  databaseOrderId?: number;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  amount?: number | string;
+  currency?: string;
+  status?: string;
+  items?: any[];
+  paidAt?: string;
 };
 
 export default function PaymentSuccessPage() {
-  const router = useRouter();
-
   const [payment, setPayment] =
-    useState<PaymentDetails | null>(null);
+    useState<PaymentData | null>(null);
 
   useEffect(() => {
     try {
@@ -27,164 +26,245 @@ export default function PaymentSuccessPage() {
         );
 
       if (savedPayment) {
-        setPayment(
-          JSON.parse(savedPayment)
+        const parsed = JSON.parse(savedPayment);
+
+        console.log(
+          "PAYMENT SUCCESS DATA:",
+          parsed
         );
+
+        setPayment(parsed);
       }
-    } catch {
-      setPayment(null);
+    } catch (error) {
+      console.error(
+        "Failed to load payment:",
+        error
+      );
     }
   }, []);
 
+  const orderId =
+    payment?.databaseOrderId;
+
+  const amount =
+    Number(payment?.amount || 0);
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-5 py-10 text-white">
+    <main className="min-h-screen bg-slate-950 p-6 text-white md:p-10">
 
-      <div className="w-full max-w-xl rounded-3xl border border-slate-800 bg-slate-900 p-8 shadow-2xl">
+      <div className="mx-auto flex min-h-[80vh] max-w-3xl items-center justify-center">
 
-        {/* SUCCESS ICON */}
+        <div className="w-full rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center shadow-2xl md:p-12">
 
-        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10 text-5xl">
-          ✅
-        </div>
+          {/* SUCCESS */}
 
-        <p className="mt-6 text-center text-xs font-bold uppercase tracking-widest text-emerald-400">
-          Payment Successful
-        </p>
+          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500/10 text-5xl text-emerald-400">
+            ✓
+          </div>
 
-        <h1 className="mt-3 text-center text-3xl font-black">
-          Thank You for Your Order!
-        </h1>
+          <h1 className="mt-6 text-3xl font-bold">
+            Payment Successful!
+          </h1>
 
-        <p className="mx-auto mt-4 max-w-md text-center text-sm leading-6 text-slate-400">
-          Your payment has been successfully verified
-          and your order has been confirmed.
-        </p>
+          <p className="mt-3 text-slate-400">
+            Your payment has been successfully
+            verified and recorded.
+          </p>
 
-        {/* PAYMENT DETAILS */}
+          {/* AMOUNT */}
 
-        {payment && (
-          <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-5">
+          <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-950 p-6">
 
-            <h2 className="mb-5 text-sm font-bold uppercase tracking-wider text-slate-400">
-              Payment Details
+            <p className="text-sm text-slate-400">
+              Amount Paid
+            </p>
+
+            <p className="mt-2 text-4xl font-black">
+              ₹
+              {amount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </p>
+
+            <p className="mt-1 text-sm text-slate-500">
+              {payment?.currency || "INR"}
+            </p>
+
+          </div>
+
+          {/* PAYMENT INFORMATION */}
+
+          <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-6 text-left">
+
+            <h2 className="mb-5 text-lg font-bold">
+              Payment Information
             </h2>
-
-            {/* AMOUNT */}
-
-            <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-
-              <span className="text-sm text-slate-500">
-                Amount Paid
-              </span>
-
-              <span className="text-xl font-black text-emerald-400">
-                ₹
-                {payment.amount.toLocaleString(
-                  "en-IN"
-                )}
-              </span>
-
-            </div>
 
             {/* ORDER ID */}
 
-            <div className="mt-4">
+            <div className="mb-5">
+
+              <p className="text-xs text-slate-500">
+                IntentCart Order ID
+              </p>
+
+              <p className="mt-1 text-lg font-bold text-cyan-400">
+                #{orderId || "Not available"}
+              </p>
+
+            </div>
+
+            {/* RAZORPAY ORDER */}
+
+            <div className="mb-5">
 
               <p className="text-xs text-slate-500">
                 Razorpay Order ID
               </p>
 
-              <p className="mt-1 break-all text-sm font-semibold text-slate-300">
-                {payment.orderId}
+              <p className="mt-1 break-all font-mono text-sm text-slate-200">
+                {payment?.razorpayOrderId ||
+                  "Not available"}
               </p>
 
             </div>
 
-            {/* PAYMENT ID */}
+            {/* RAZORPAY PAYMENT */}
 
-            <div className="mt-4">
+            <div className="mb-5">
 
               <p className="text-xs text-slate-500">
                 Razorpay Payment ID
               </p>
 
-              <p className="mt-1 break-all text-sm font-semibold text-slate-300">
-                {payment.paymentId}
+              <p className="mt-1 break-all font-mono text-sm text-slate-200">
+                {payment?.razorpayPaymentId ||
+                  "Not available"}
               </p>
 
             </div>
 
             {/* STATUS */}
 
-            <div className="mt-4 flex items-center justify-between">
+            <div>
 
-              <span className="text-sm text-slate-500">
-                Status
-              </span>
+              <p className="text-xs text-slate-500">
+                Payment Status
+              </p>
 
-              <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold uppercase text-emerald-400">
-                {payment.status}
-              </span>
-
-            </div>
-
-            {/* DATE */}
-
-            <div className="mt-4 flex items-center justify-between">
-
-              <span className="text-sm text-slate-500">
-                Payment Date
-              </span>
-
-              <span className="text-sm font-semibold text-slate-300">
-                {new Date(
-                  payment.paidAt
-                ).toLocaleString(
-                  "en-IN"
-                )}
+              <span className="mt-2 inline-block rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-bold uppercase text-emerald-400">
+                {payment?.status || "paid"}
               </span>
 
             </div>
 
           </div>
-        )}
 
-        {/* NO PAYMENT DETAILS */}
+          {/* PURCHASED ITEMS */}
 
-        {!payment && (
-          <div className="mt-8 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-center text-sm text-yellow-400">
-            Payment was successful, but payment
-            details could not be loaded.
+          {payment?.items &&
+            payment.items.length > 0 && (
+              <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950 p-6 text-left">
+
+                <h2 className="mb-5 text-lg font-bold">
+                  Order Contents
+                </h2>
+
+                <div className="space-y-3">
+
+                  {payment.items.map(
+                    (item: any, index: number) => (
+                      <div
+                        key={
+                          item.id ??
+                          `${item.product_id}-${index}`
+                        }
+                        className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900 p-4"
+                      >
+
+                        <div className="flex items-center gap-3">
+
+                          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-800 text-2xl">
+                            {item.emoji || "📦"}
+                          </div>
+
+                          <div>
+
+                            <p className="font-semibold">
+                              {item.name}
+                            </p>
+
+                            <p className="text-xs text-slate-500">
+                              {item.category ||
+                                "Product"}{" "}
+                              · Qty{" "}
+                              {item.quantity}
+                            </p>
+
+                          </div>
+
+                        </div>
+
+                        <p className="font-bold">
+                          ₹
+                          {(
+                            Number(
+                              item.price
+                            ) *
+                            Number(
+                              item.quantity
+                            )
+                          ).toLocaleString(
+                            "en-IN"
+                          )}
+                        </p>
+
+                      </div>
+                    )
+                  )}
+
+                </div>
+
+              </div>
+            )}
+
+          {/* BUTTONS */}
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
+
+            {orderId && (
+              <Link
+                href={`/order/${orderId}`}
+                className="rounded-xl bg-cyan-500 px-6 py-3 font-bold text-slate-950 transition hover:bg-cyan-400"
+              >
+                View Order Details →
+              </Link>
+            )}
+
+            <Link
+              href="/transactions"
+              className="rounded-xl border border-slate-700 px-6 py-3 font-semibold text-slate-300 transition hover:bg-slate-800"
+            >
+              View Transactions
+            </Link>
+
+            <Link
+              href="/dashboard"
+              className="rounded-xl border border-slate-700 px-6 py-3 font-semibold text-slate-300 transition hover:bg-slate-800"
+            >
+              Dashboard
+            </Link>
+
           </div>
-        )}
 
-        {/* BUTTONS */}
+          {/* FOOTER */}
 
-        <button
-          onClick={() =>
-            router.push("/products")
-          }
-          className="mt-8 w-full rounded-xl bg-cyan-500 px-5 py-4 text-sm font-bold text-slate-950 transition hover:bg-cyan-400"
-        >
-          🛍️ Continue Shopping
-        </button>
-
-        <button
-          onClick={() =>
-            router.push("/")
-          }
-          className="mt-3 w-full rounded-xl border border-slate-700 bg-slate-950 px-5 py-3.5 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white"
-        >
-          Go to Home
-        </button>
-
-        {/* SECURITY */}
-
-        <div className="mt-6 border-t border-slate-800 pt-5 text-center">
-
-          <p className="text-[11px] text-slate-600">
-            🔒 Payment securely processed and verified
-            through Razorpay
+          <p className="mt-8 text-xs text-slate-600">
+            IntentCart • PostgreSQL Order Intelligence
           </p>
 
         </div>
