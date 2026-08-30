@@ -308,7 +308,7 @@ export default function CartPage() {
 
         const orderResponse =
           await fetch(
-            "http://localhost:5000/api/create-order",
+            "http://https://intentcart-pixx.onrender.com",
             {
               method: "POST",
 
@@ -402,7 +402,7 @@ export default function CartPage() {
 
                 const verifyResponse =
                   await fetch(
-                    "http://localhost:5000/api/verify-payment",
+                    "http://https://intentcart-pixx.onrender.com/api/verify-payment",
                     {
                       method: "POST",
 

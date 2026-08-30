@@ -40,7 +40,7 @@ export default function OrderPage() {
         }
 
         const response = await fetch(
-          `http://localhost:5000/api/orders/${orderId}`,
+          `http://https://intentcart-pixx.onrender.com/api/orders/${orderId}`,
           {
             cache: "no-store",
           }

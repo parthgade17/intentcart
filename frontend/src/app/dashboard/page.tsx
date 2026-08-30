@@ -54,7 +54,7 @@ export default function Dashboard() {
         // ========================================
 
         const ordersResponse = await fetch(
-          "http://localhost:5000/api/orders",
+          "http://https://intentcart-pixx.onrender.com/api/orders",
           {
             cache: "no-store",
           }
@@ -88,7 +88,7 @@ export default function Dashboard() {
         // ========================================
 
         const metricsResponse = await fetch(
-          "http://localhost:5000/api/metrics",
+          "http://https://intentcart-pixx.onrender.com/api/metrics",
           {
             cache: "no-store",
           }

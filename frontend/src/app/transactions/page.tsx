@@ -31,7 +31,7 @@ export default function TransactionsPage() {
       setError("");
 
       const response = await fetch(
-        "http://localhost:5000/api/orders",
+        "http://lhttps://intentcart-pixx.onrender.comocalhost:5000/api/orders",
         {
           cache: "no-store",
         }

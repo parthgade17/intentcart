@@ -69,7 +69,7 @@ type RiskResult = {
   lowValueHealth: number;
 };
 
-const BACKEND_URL = "http://localhost:5000";
+const BACKEND_URL = "http://https://intentcart-pixx.onrender.com";
 
 export default function AIInsightsPage() {
   const [data, setData] = useState<AIResponse | null>(null);
