@@ -15,14 +15,12 @@ const { Pool } = pg;
 // ======================================================
 
 const pool = new Pool({
-  user: "postgres",
-  host: "localhost",
-  database: "intentcart_db",
-  password: process.env.POSTGRES_PASSWORD,
-  port: 5432,
+  connectionString: process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false,
+  },
 });
 
-// Test PostgreSQL connection
 pool.on("error", (error) => {
   console.error("Unexpected PostgreSQL error:", error);
 });
@@ -82,7 +80,7 @@ app.get("/api/db-test", async (req, res) => {
 
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message || "Database connection failed",
     });
   }
 });
@@ -93,52 +91,29 @@ app.get("/api/db-test", async (req, res) => {
 
 async function createTables() {
   try {
-    // --------------------------------------------------
-    // ORDERS
-    // --------------------------------------------------
-
     await pool.query(`
       CREATE TABLE IF NOT EXISTS orders (
         id SERIAL PRIMARY KEY,
-
         razorpay_order_id VARCHAR(100) UNIQUE,
-
         razorpay_payment_id VARCHAR(100),
-
         amount NUMERIC(10, 2) NOT NULL,
-
         currency VARCHAR(10) DEFAULT 'INR',
-
         status VARCHAR(30) DEFAULT 'created',
-
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    // --------------------------------------------------
-    // ORDER ITEMS
-    // --------------------------------------------------
-
     await pool.query(`
       CREATE TABLE IF NOT EXISTS order_items (
         id SERIAL PRIMARY KEY,
-
         order_id INTEGER NOT NULL,
-
         product_id INTEGER NOT NULL,
-
         name VARCHAR(255) NOT NULL,
-
         category VARCHAR(100),
-
         price NUMERIC(10, 2) NOT NULL,
-
         quantity INTEGER NOT NULL,
-
         emoji VARCHAR(20),
-
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-
         CONSTRAINT fk_order
           FOREIGN KEY (order_id)
           REFERENCES orders(id)
@@ -146,32 +121,22 @@ async function createTables() {
       );
     `);
 
-    // --------------------------------------------------
-    // AI INSIGHTS
-    // --------------------------------------------------
-
     await pool.query(`
       CREATE TABLE IF NOT EXISTS ai_insights (
         id SERIAL PRIMARY KEY,
-
         insights TEXT NOT NULL,
-
         total_revenue NUMERIC(10, 2),
-
         total_transactions INTEGER,
-
         average_order_value NUMERIC(10, 2),
-
         success_rate NUMERIC(5, 2),
-
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
     console.log("PostgreSQL tables ready");
-
   } catch (error) {
     console.error("Table creation error:", error);
+    throw error;
   }
 }
 
@@ -182,10 +147,6 @@ async function createTables() {
 app.post("/api/create-order", async (req, res) => {
   try {
     const { amount, items } = req.body;
-
-    // --------------------------------------------------
-    // VALIDATE AMOUNT
-    // --------------------------------------------------
 
     if (
       amount === undefined ||
@@ -199,10 +160,6 @@ app.post("/api/create-order", async (req, res) => {
       });
     }
 
-    // --------------------------------------------------
-    // VALIDATE CART
-    // --------------------------------------------------
-
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
         success: false,
@@ -211,10 +168,6 @@ app.post("/api/create-order", async (req, res) => {
     }
 
     const numericAmount = Number(amount);
-
-    // --------------------------------------------------
-    // VALIDATE ITEMS
-    // --------------------------------------------------
 
     for (const item of items) {
       if (
@@ -231,37 +184,18 @@ app.post("/api/create-order", async (req, res) => {
       }
     }
 
-    // --------------------------------------------------
-    // INR → PAISE
-    // --------------------------------------------------
+    const amountInPaise = Math.round(numericAmount * 100);
 
-    const amountInPaise = Math.round(
-      numericAmount * 100
-    );
-
-    // --------------------------------------------------
-    // CREATE RAZORPAY ORDER
-    // --------------------------------------------------
-
-    const razorpayOrder =
-      await razorpay.orders.create({
-        amount: amountInPaise,
-        currency: "INR",
-        receipt: `intentcart_${Date.now()}`,
-      });
-
-    // --------------------------------------------------
-    // SAVE ORDER + ITEMS
-    // --------------------------------------------------
+    const razorpayOrder = await razorpay.orders.create({
+      amount: amountInPaise,
+      currency: "INR",
+      receipt: `intentcart_${Date.now()}`,
+    });
 
     const client = await pool.connect();
 
     try {
       await client.query("BEGIN");
-
-      // ----------------------------------------------
-      // INSERT ORDER
-      // ----------------------------------------------
 
       const orderResult = await client.query(
         `
@@ -283,12 +217,7 @@ app.post("/api/create-order", async (req, res) => {
         ]
       );
 
-      const databaseOrder =
-        orderResult.rows[0];
-
-      // ----------------------------------------------
-      // INSERT ITEMS
-      // ----------------------------------------------
+      const databaseOrder = orderResult.rows[0];
 
       for (const item of items) {
         await client.query(
@@ -323,29 +252,16 @@ app.post("/api/create-order", async (req, res) => {
 
       await client.query("COMMIT");
 
-      // ----------------------------------------------
-      // RESPONSE
-      // ----------------------------------------------
-
       res.json({
         success: true,
-
         order: {
           id: databaseOrder.id,
-
-          razorpay_order_id:
-            razorpayOrder.id,
-
-          amount:
-            razorpayOrder.amount,
-
-          currency:
-            razorpayOrder.currency,
+          razorpay_order_id: razorpayOrder.id,
+          amount: razorpayOrder.amount,
+          currency: razorpayOrder.currency,
         },
-
         items,
       });
-
     } catch (databaseError) {
       await client.query("ROLLBACK");
 
@@ -355,20 +271,14 @@ app.post("/api/create-order", async (req, res) => {
       );
 
       throw databaseError;
-
     } finally {
       client.release();
     }
-
   } catch (error) {
-    console.error(
-      "Create order error:",
-      error
-    );
+    console.error("Create order error:", error);
 
     res.status(500).json({
       success: false,
-
       error:
         error.message ||
         "Failed to create payment order",
@@ -388,10 +298,6 @@ app.post("/api/verify-payment", async (req, res) => {
       razorpay_signature,
     } = req.body;
 
-    // --------------------------------------------------
-    // VALIDATION
-    // --------------------------------------------------
-
     if (
       !razorpay_order_id ||
       !razorpay_payment_id ||
@@ -399,54 +305,34 @@ app.post("/api/verify-payment", async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        error:
-          "Missing payment verification details",
+        error: "Missing payment verification details",
       });
     }
 
-    // --------------------------------------------------
-    // GENERATE SIGNATURE
-    // --------------------------------------------------
+    const generatedSignature = crypto
+      .createHmac(
+        "sha256",
+        process.env.RAZORPAY_KEY_SECRET
+      )
+      .update(
+        `${razorpay_order_id}|${razorpay_payment_id}`
+      )
+      .digest("hex");
 
-    const generatedSignature =
-      crypto
-        .createHmac(
-          "sha256",
-          process.env.RAZORPAY_KEY_SECRET
-        )
-        .update(
-          `${razorpay_order_id}|${razorpay_payment_id}`
-        )
-        .digest("hex");
-
-    // --------------------------------------------------
-    // VERIFY SIGNATURE
-    // --------------------------------------------------
-
-    if (
-      generatedSignature !==
-      razorpay_signature
-    ) {
+    if (generatedSignature !== razorpay_signature) {
       return res.status(400).json({
         success: false,
         error: "Invalid payment signature",
       });
     }
 
-    // --------------------------------------------------
-    // UPDATE ORDER
-    // --------------------------------------------------
-
     const orderResult = await pool.query(
       `
       UPDATE orders
-
       SET
         razorpay_payment_id = $1,
         status = 'paid'
-
       WHERE razorpay_order_id = $2
-
       RETURNING *
       `,
       [
@@ -462,12 +348,7 @@ app.post("/api/verify-payment", async (req, res) => {
       });
     }
 
-    const order =
-      orderResult.rows[0];
-
-    // --------------------------------------------------
-    // GET ORDER ITEMS
-    // --------------------------------------------------
+    const order = orderResult.rows[0];
 
     const itemsResult = await pool.query(
       `
@@ -486,21 +367,12 @@ app.post("/api/verify-payment", async (req, res) => {
       [order.id]
     );
 
-    // --------------------------------------------------
-    // RESPONSE
-    // --------------------------------------------------
-
     res.json({
       success: true,
-
-      message:
-        "Payment verified and saved successfully",
-
+      message: "Payment verified and saved successfully",
       order,
-
       items: itemsResult.rows,
     });
-
   } catch (error) {
     console.error(
       "Payment verification error:",
@@ -509,7 +381,6 @@ app.post("/api/verify-payment", async (req, res) => {
 
     res.status(500).json({
       success: false,
-
       error:
         error.message ||
         "Payment verification failed",
@@ -523,10 +394,6 @@ app.post("/api/verify-payment", async (req, res) => {
 
 app.get("/api/orders", async (req, res) => {
   try {
-    // --------------------------------------------------
-    // GET ORDERS
-    // --------------------------------------------------
-
     const orderResult = await pool.query(`
       SELECT
         id,
@@ -541,10 +408,6 @@ app.get("/api/orders", async (req, res) => {
     `);
 
     const orders = orderResult.rows;
-
-    // --------------------------------------------------
-    // GET ITEMS
-    // --------------------------------------------------
 
     if (orders.length > 0) {
       const itemsResult = await pool.query(`
@@ -561,33 +424,21 @@ app.get("/api/orders", async (req, res) => {
         ORDER BY id ASC
       `);
 
-      // ----------------------------------------------
-      // ATTACH ITEMS TO ORDERS
-      // ----------------------------------------------
-
       for (const order of orders) {
-        order.items =
-          itemsResult.rows.filter(
-            (item) =>
-              item.order_id === order.id
-          );
+        order.items = itemsResult.rows.filter(
+          (item) => item.order_id === order.id
+        );
       }
-
     } else {
       for (const order of orders) {
         order.items = [];
       }
     }
 
-    // --------------------------------------------------
-    // RESPONSE
-    // --------------------------------------------------
-
     res.json({
       success: true,
       orders,
     });
-
   } catch (error) {
     console.error(
       "GET /api/orders error:",
@@ -596,7 +447,6 @@ app.get("/api/orders", async (req, res) => {
 
     res.status(500).json({
       success: false,
-
       error:
         error.message ||
         "Failed to fetch transaction history",
@@ -610,8 +460,7 @@ app.get("/api/orders", async (req, res) => {
 
 app.get("/api/orders/:id", async (req, res) => {
   try {
-    const orderId =
-      Number(req.params.id);
+    const orderId = Number(req.params.id);
 
     if (!Number.isInteger(orderId)) {
       return res.status(400).json({
@@ -619,10 +468,6 @@ app.get("/api/orders/:id", async (req, res) => {
         error: "Invalid order ID",
       });
     }
-
-    // --------------------------------------------------
-    // ORDER
-    // --------------------------------------------------
 
     const orderResult = await pool.query(
       `
@@ -647,12 +492,7 @@ app.get("/api/orders/:id", async (req, res) => {
       });
     }
 
-    const order =
-      orderResult.rows[0];
-
-    // --------------------------------------------------
-    // ITEMS
-    // --------------------------------------------------
+    const order = orderResult.rows[0];
 
     const itemsResult = await pool.query(
       `
@@ -671,16 +511,11 @@ app.get("/api/orders/:id", async (req, res) => {
       [orderId]
     );
 
-    // --------------------------------------------------
-    // RESPONSE
-    // --------------------------------------------------
-
     res.json({
       success: true,
       order,
       items: itemsResult.rows,
     });
-
   } catch (error) {
     console.error(
       "GET SINGLE ORDER error:",
@@ -689,7 +524,6 @@ app.get("/api/orders/:id", async (req, res) => {
 
     res.status(500).json({
       success: false,
-
       error:
         error.message ||
         "Failed to fetch order",
@@ -712,14 +546,11 @@ app.get("/api/metrics", async (req, res) => {
 
     const orders = result.rows;
 
-    const totalTransactions =
-      orders.length;
+    const totalTransactions = orders.length;
 
-    const successfulOrders =
-      orders.filter(
-        (order) =>
-          order.status === "paid"
-      );
+    const successfulOrders = orders.filter(
+      (order) => order.status === "paid"
+    );
 
     const successfulCount =
       successfulOrders.length;
@@ -733,51 +564,35 @@ app.get("/api/metrics", async (req, res) => {
 
     const averageOrderValue =
       successfulCount > 0
-        ? totalRevenue /
-          successfulCount
+        ? totalRevenue / successfulCount
         : 0;
 
     const successRate =
       totalTransactions > 0
-        ? (successfulCount /
-            totalTransactions) *
-          100
+        ? (successfulCount / totalTransactions) * 100
         : 0;
 
     res.json({
       success: true,
-
       metrics: {
-        totalRevenue:
-          Number(
-            totalRevenue.toFixed(2)
-          ),
-
+        totalRevenue: Number(
+          totalRevenue.toFixed(2)
+        ),
         totalTransactions,
-
-        averageOrderValue:
-          Number(
-            averageOrderValue.toFixed(2)
-          ),
-
-        successRate:
-          Number(
-            successRate.toFixed(2)
-          ),
+        averageOrderValue: Number(
+          averageOrderValue.toFixed(2)
+        ),
+        successRate: Number(
+          successRate.toFixed(2)
+        ),
       },
     });
-
   } catch (error) {
-    console.error(
-      "Metrics error:",
-      error
-    );
+    console.error("Metrics error:", error);
 
     res.status(500).json({
       success: false,
-
-      error:
-        "Failed to fetch live metrics",
+      error: "Failed to fetch live metrics",
     });
   }
 });
@@ -788,10 +603,6 @@ app.get("/api/metrics", async (req, res) => {
 
 app.get("/api/ai-insights", async (req, res) => {
   try {
-    // --------------------------------------------------
-    // GET TRANSACTIONS
-    // --------------------------------------------------
-
     const result = await pool.query(`
       SELECT
         id,
@@ -805,18 +616,11 @@ app.get("/api/ai-insights", async (req, res) => {
 
     const orders = result.rows;
 
-    // --------------------------------------------------
-    // METRICS
-    // --------------------------------------------------
+    const totalTransactions = orders.length;
 
-    const totalTransactions =
-      orders.length;
-
-    const successfulOrders =
-      orders.filter(
-        (order) =>
-          order.status === "paid"
-      );
+    const successfulOrders = orders.filter(
+      (order) => order.status === "paid"
+    );
 
     const successfulCount =
       successfulOrders.length;
@@ -830,91 +634,64 @@ app.get("/api/ai-insights", async (req, res) => {
 
     const averageOrderValue =
       successfulCount > 0
-        ? totalRevenue /
-          successfulCount
+        ? totalRevenue / successfulCount
         : 0;
 
     const successRate =
       totalTransactions > 0
-        ? (successfulCount /
-            totalTransactions) *
-          100
+        ? (successfulCount / totalTransactions) * 100
         : 0;
 
     const metrics = {
-      totalRevenue:
-        Number(
-          totalRevenue.toFixed(2)
-        ),
-
+      totalRevenue: Number(
+        totalRevenue.toFixed(2)
+      ),
       totalTransactions,
-
-      averageOrderValue:
-        Number(
-          averageOrderValue.toFixed(2)
-        ),
-
-      successRate:
-        Number(
-          successRate.toFixed(2)
-        ),
+      averageOrderValue: Number(
+        averageOrderValue.toFixed(2)
+      ),
+      successRate: Number(
+        successRate.toFixed(2)
+      ),
     };
 
     // --------------------------------------------------
     // CHECK CACHE
     // --------------------------------------------------
 
-    const cachedResult =
-      await pool.query(`
-        SELECT
-          insights,
-          total_revenue,
-          total_transactions,
-          average_order_value,
-          success_rate,
-          created_at
-        FROM ai_insights
-        ORDER BY created_at DESC
-        LIMIT 1
-      `);
+    const cachedResult = await pool.query(`
+      SELECT
+        insights,
+        total_revenue,
+        total_transactions,
+        average_order_value,
+        success_rate,
+        created_at
+      FROM ai_insights
+      ORDER BY created_at DESC
+      LIMIT 1
+    `);
 
-    if (
-      cachedResult.rows.length > 0
-    ) {
-      const cached =
-        cachedResult.rows[0];
+    if (cachedResult.rows.length > 0) {
+      const cached = cachedResult.rows[0];
 
       const cacheMatches =
-        Number(
-          cached.total_revenue
-        ) ===
+        Number(cached.total_revenue) ===
           metrics.totalRevenue &&
-        Number(
-          cached.total_transactions
-        ) ===
+        Number(cached.total_transactions) ===
           metrics.totalTransactions &&
-        Number(
-          cached.average_order_value
-        ) ===
+        Number(cached.average_order_value) ===
           metrics.averageOrderValue &&
-        Number(
-          cached.success_rate
-        ) ===
+        Number(cached.success_rate) ===
           metrics.successRate;
 
       if (cacheMatches) {
         return res.json({
           success: true,
-
           metrics,
-
-          insights:
-            cached.insights,
-
+          insights: cached.insights,
           cached: true,
-
-          cachedAt:
-            cached.created_at,
+          cachedAt: cached.created_at,
         });
       }
     }
@@ -926,12 +703,9 @@ app.get("/api/ai-insights", async (req, res) => {
     if (orders.length === 0) {
       return res.json({
         success: true,
-
         metrics,
-
         insights:
           "There are no transactions to analyze yet.",
-
         cached: false,
       });
     }
@@ -940,22 +714,15 @@ app.get("/api/ai-insights", async (req, res) => {
     // TRANSACTION DATA
     // --------------------------------------------------
 
-    const transactionData =
-      orders.map((order) => ({
+    const transactionData = orders.map(
+      (order) => ({
         id: order.id,
-
-        amount:
-          Number(order.amount),
-
-        currency:
-          order.currency,
-
-        status:
-          order.status,
-
-        created_at:
-          order.created_at,
-      }));
+        amount: Number(order.amount),
+        currency: order.currency,
+        status: order.status,
+        created_at: order.created_at,
+      })
+    );
 
     // --------------------------------------------------
     // GEMINI PROMPT
@@ -1034,7 +801,6 @@ Do not invent transaction data.
           model: "gemini-3.6-flash",
           contents: prompt,
         });
-
     } catch (geminiError) {
       console.error(
         "Gemini AI error:",
@@ -1060,72 +826,42 @@ Do not invent transaction data.
           "UNAVAILABLE"
         );
 
-      // ----------------------------------------------
-      // CACHE FALLBACK
-      // ----------------------------------------------
-
-      if (
-        cachedResult.rows.length > 0
-      ) {
+      if (cachedResult.rows.length > 0) {
         const cached =
           cachedResult.rows[0];
 
         return res.json({
           success: true,
-
           metrics,
-
-          insights:
-            cached.insights,
-
+          insights: cached.insights,
           cached: true,
-
-          cachedAt:
-            cached.created_at,
-
-          warning:
-            isQuotaError
-              ? "Gemini free-tier quota reached. Showing the last saved analysis."
-              : isTemporaryError
-              ? "Gemini is temporarily unavailable. Showing the last saved analysis."
-              : "Showing the last saved analysis.",
+          cachedAt: cached.created_at,
+          warning: isQuotaError
+            ? "Gemini free-tier quota reached. Showing the last saved analysis."
+            : isTemporaryError
+            ? "Gemini is temporarily unavailable. Showing the last saved analysis."
+            : "Showing the last saved analysis.",
         });
       }
-
-      // ----------------------------------------------
-      // QUOTA
-      // ----------------------------------------------
 
       if (isQuotaError) {
         return res.status(200).json({
           success: true,
-
           metrics,
-
           insights:
             "Gemini AI has reached its current free-tier quota. Your transaction data is available, but a new AI analysis cannot be generated right now. Please try again later.",
-
           cached: false,
-
           quotaExceeded: true,
         });
       }
 
-      // ----------------------------------------------
-      // TEMPORARY
-      // ----------------------------------------------
-
       if (isTemporaryError) {
         return res.status(200).json({
           success: true,
-
           metrics,
-
           insights:
             "Gemini AI is temporarily experiencing high demand. Please try again later.",
-
           cached: false,
-
           temporaryError: true,
         });
       }
@@ -1159,13 +895,9 @@ Do not invent transaction data.
       `,
       [
         insights,
-
         metrics.totalRevenue,
-
         metrics.totalTransactions,
-
         metrics.averageOrderValue,
-
         metrics.successRate,
       ]
     );
@@ -1176,16 +908,11 @@ Do not invent transaction data.
 
     res.json({
       success: true,
-
       metrics,
-
       insights,
-
       cached: false,
-
       savedToDatabase: true,
     });
-
   } catch (error) {
     console.error(
       "AI insights error:",
@@ -1194,7 +921,6 @@ Do not invent transaction data.
 
     res.status(500).json({
       success: false,
-
       error:
         error.message ||
         "Failed to generate AI insights",
@@ -1213,12 +939,11 @@ async function startServer() {
   try {
     await createTables();
 
-    app.listen(PORT, () => {
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(
-        `IntentCart backend running on http://localhost:${PORT}`
+        `IntentCart backend running on port ${PORT}`
       );
     });
-
   } catch (error) {
     console.error(
       "Failed to start server:",
