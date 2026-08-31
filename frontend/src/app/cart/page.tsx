@@ -1,7 +1,12 @@
 
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 declare global {
@@ -28,7 +33,7 @@ type RazorpayResponse = {
   razorpay_signature: string;
 };
 
-export default function CartPage() {
+function CartContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -36,12 +41,7 @@ export default function CartPage() {
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-
   const [isBuyNow, setIsBuyNow] = useState(false);
-
-  // ==========================================
-  // BACKEND URL
-  // ==========================================
 
   const API_URL =
     process.env.NEXT_PUBLIC_API_URL;
@@ -57,52 +57,8 @@ export default function CartPage() {
 
       setIsBuyNow(buyNowMode);
 
-      if (buyNowMode) {
-        // ====================================
-        // LOAD BUY NOW ITEM
-        // ====================================
-
-        const savedBuyNow =
-          localStorage.getItem(
-            "intentcart_buy_now"
-          );
-
-        if (!savedBuyNow) {
-          setCart([]);
-          setLoaded(true);
-          setMessage(
-            "Buy Now item was not found."
-          );
-          return;
-        }
-
-        const parsed =
-          JSON.parse(savedBuyNow);
-
-        if (
-          Array.isArray(parsed) &&
-          parsed.length > 0
-        ) {
-          setCart(parsed);
-        } else {
-          setCart([]);
-          setMessage(
-            "Buy Now item was not found."
-          );
-        }
-
-        setLoaded(true);
-        return;
-      }
-
-      // ========================================
-      // NORMAL CART
-      // ========================================
-
       const savedCart =
-        localStorage.getItem(
-          "intentcart_cart"
-        );
+        localStorage.getItem("intentcart_cart");
 
       if (!savedCart) {
         setCart([]);
@@ -110,8 +66,7 @@ export default function CartPage() {
         return;
       }
 
-      const parsed =
-        JSON.parse(savedCart);
+      const parsed = JSON.parse(savedCart);
 
       if (Array.isArray(parsed)) {
         setCart(parsed);
@@ -119,11 +74,7 @@ export default function CartPage() {
         setCart([]);
       }
     } catch (error) {
-      console.error(
-        "Cart loading error:",
-        error
-      );
-
+      console.error("Cart loading error:", error);
       setCart([]);
     }
 
@@ -131,12 +82,10 @@ export default function CartPage() {
   }, [searchParams]);
 
   // ==========================================
-  // SAVE NORMAL CART
+  // SAVE CART
   // ==========================================
 
-  const saveCart = (
-    updatedCart: CartItem[]
-  ) => {
+  const saveCart = (updatedCart: CartItem[]) => {
     setCart(updatedCart);
 
     localStorage.setItem(
@@ -160,51 +109,30 @@ export default function CartPage() {
       return;
     }
 
-    const updatedCart = cart.map(
-      (item) =>
-        item.id === productId
-          ? {
-              ...item,
-              quantity,
-            }
-          : item
+    const updatedCart = cart.map((item) =>
+      item.id === productId
+        ? {
+            ...item,
+            quantity,
+          }
+        : item
     );
 
-    if (isBuyNow) {
-      setCart(updatedCart);
-
-      localStorage.setItem(
-        "intentcart_buy_now",
-        JSON.stringify(updatedCart)
-      );
-    } else {
-      saveCart(updatedCart);
-    }
+    saveCart(updatedCart);
   };
 
   // ==========================================
   // REMOVE ITEM
   // ==========================================
 
-  const removeItem = (
-    productId: number
-  ) => {
+  const removeItem = (productId: number) => {
     if (loading) return;
 
     const updatedCart = cart.filter(
-      (item) =>
-        item.id !== productId
+      (item) => item.id !== productId
     );
 
-    if (isBuyNow) {
-      setCart(updatedCart);
-
-      localStorage.removeItem(
-        "intentcart_buy_now"
-      );
-    } else {
-      saveCart(updatedCart);
-    }
+    saveCart(updatedCart);
   };
 
   // ==========================================
@@ -216,15 +144,13 @@ export default function CartPage() {
 
     setCart([]);
 
-    if (isBuyNow) {
-      localStorage.removeItem(
-        "intentcart_buy_now"
-      );
-    } else {
-      localStorage.removeItem(
-        "intentcart_cart"
-      );
-    }
+    localStorage.removeItem(
+      "intentcart_cart"
+    );
+
+    setIsBuyNow(false);
+
+    router.replace("/cart");
   };
 
   // ==========================================
@@ -234,8 +160,7 @@ export default function CartPage() {
   const totalItems = useMemo(() => {
     return cart.reduce(
       (total, item) =>
-        total +
-        Number(item.quantity),
+        total + Number(item.quantity),
       0
     );
   }, [cart]);
@@ -265,8 +190,7 @@ export default function CartPage() {
   // TOTAL
   // ==========================================
 
-  const total =
-    subtotal + delivery;
+  const total = subtotal + delivery;
 
   // ==========================================
   // LOAD RAZORPAY
@@ -274,514 +198,466 @@ export default function CartPage() {
 
   const loadRazorpay =
     (): Promise<boolean> => {
-      return new Promise(
-        (resolve) => {
-          if (
-            typeof window ===
-            "undefined"
-          ) {
-            resolve(false);
-            return;
-          }
-
-          if (window.Razorpay) {
-            resolve(true);
-            return;
-          }
-
-          const scriptId =
-            "razorpay-checkout-script";
-
-          const existingScript =
-            document.getElementById(
-              scriptId
-            );
-
-          if (existingScript) {
-            existingScript.addEventListener(
-              "load",
-              () => resolve(true)
-            );
-
-            existingScript.addEventListener(
-              "error",
-              () => resolve(false)
-            );
-
-            return;
-          }
-
-          const script =
-            document.createElement(
-              "script"
-            );
-
-          script.id = scriptId;
-
-          script.src =
-            "https://checkout.razorpay.com/v1/checkout.js";
-
-          script.async = true;
-
-          script.onload = () =>
-            resolve(true);
-
-          script.onerror = () =>
-            resolve(false);
-
-          document.body.appendChild(
-            script
-          );
+      return new Promise((resolve) => {
+        if (typeof window === "undefined") {
+          resolve(false);
+          return;
         }
-      );
+
+        if (window.Razorpay) {
+          resolve(true);
+          return;
+        }
+
+        const scriptId =
+          "razorpay-checkout-script";
+
+        const existingScript =
+          document.getElementById(scriptId);
+
+        if (existingScript) {
+          existingScript.addEventListener(
+            "load",
+            () => resolve(true)
+          );
+
+          existingScript.addEventListener(
+            "error",
+            () => resolve(false)
+          );
+
+          return;
+        }
+
+        const script =
+          document.createElement("script");
+
+        script.id = scriptId;
+
+        script.src =
+          "https://checkout.razorpay.com/v1/checkout.js";
+
+        script.async = true;
+
+        script.onload = () =>
+          resolve(true);
+
+        script.onerror = () =>
+          resolve(false);
+
+        document.body.appendChild(script);
+      });
     };
 
   // ==========================================
   // CHECKOUT
   // ==========================================
 
-  const handleCheckout =
-    async () => {
-      if (cart.length === 0) {
-        setMessage(
-          "Your cart is empty."
+  const handleCheckout = async () => {
+    if (cart.length === 0) {
+      setMessage(
+        "Your cart is empty."
+      );
+      return;
+    }
+
+    if (loading) return;
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      // ======================================
+      // BACKEND URL
+      // ======================================
+
+      if (!API_URL) {
+        throw new Error(
+          "Backend URL is missing. Please check NEXT_PUBLIC_API_URL in Vercel."
         );
-        return;
       }
 
-      if (loading) return;
+      // ======================================
+      // RAZORPAY KEY
+      // ======================================
 
-      setLoading(true);
-      setMessage("");
+      const razorpayKey =
+        process.env
+          .NEXT_PUBLIC_RAZORPAY_KEY_ID;
 
-      try {
-        // ======================================
-        // BACKEND URL
-        // ======================================
-
-        if (!API_URL) {
-          throw new Error(
-            "Backend URL is missing. Please check NEXT_PUBLIC_API_URL in Vercel."
-          );
-        }
-
-        // ======================================
-        // RAZORPAY KEY
-        // ======================================
-
-        const razorpayKey =
-          process.env
-            .NEXT_PUBLIC_RAZORPAY_KEY_ID;
-
-        if (!razorpayKey) {
-          throw new Error(
-            "Razorpay key is missing. Please check NEXT_PUBLIC_RAZORPAY_KEY_ID in Vercel."
-          );
-        }
-
-        // ======================================
-        // LOAD RAZORPAY
-        // ======================================
-
-        setMessage(
-          "Loading secure payment..."
+      if (!razorpayKey) {
+        throw new Error(
+          "Razorpay key is missing. Please check NEXT_PUBLIC_RAZORPAY_KEY_ID in Vercel."
         );
+      }
 
-        const razorpayLoaded =
-          await loadRazorpay();
+      // ======================================
+      // LOAD RAZORPAY
+      // ======================================
 
-        if (!razorpayLoaded) {
-          throw new Error(
-            "Failed to load Razorpay. Please check your internet connection."
-          );
-        }
+      setMessage(
+        "Loading secure payment..."
+      );
 
-        // ======================================
-        // PREPARE ITEMS
-        // ======================================
+      const razorpayLoaded =
+        await loadRazorpay();
 
-        const orderItems =
-          cart.map((item) => ({
-            id: Number(item.id),
-
-            name: String(
-              item.name
-            ),
-
-            category: String(
-              item.category || ""
-            ),
-
-            price: Number(
-              item.price
-            ),
-
-            quantity: Number(
-              item.quantity
-            ),
-
-            emoji: String(
-              item.emoji || ""
-            ),
-          }));
-
-        // ======================================
-        // CREATE ORDER
-        // ======================================
-
-        setMessage(
-          "Creating your order..."
+      if (!razorpayLoaded) {
+        throw new Error(
+          "Failed to load Razorpay. Please check your internet connection."
         );
+      }
 
-        const orderResponse =
-          await fetch(
-            `${API_URL}/api/create-order`,
-            {
-              method: "POST",
+      // ======================================
+      // PREPARE ITEMS
+      // ======================================
 
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
+      const orderItems = cart.map(
+        (item) => ({
+          id: Number(item.id),
+          name: String(item.name),
+          category: String(
+            item.category || ""
+          ),
+          price: Number(item.price),
+          quantity: Number(
+            item.quantity
+          ),
+          emoji: String(
+            item.emoji || ""
+          ),
+        })
+      );
 
-              body: JSON.stringify({
-                amount: total,
-                items: orderItems,
-              }),
-            }
-          );
+      // ======================================
+      // CREATE ORDER
+      // ======================================
 
-        let orderData: any;
+      setMessage(
+        "Creating your order..."
+      );
 
-        try {
-          orderData =
-            await orderResponse.json();
-        } catch {
-          throw new Error(
-            "Backend returned an invalid response."
-          );
-        }
+      const orderResponse =
+        await fetch(
+          `${API_URL}/api/create-order`,
+          {
+            method: "POST",
 
-        console.log(
-          "CREATE ORDER RESPONSE:",
-          orderData
-        );
-
-        if (
-          !orderResponse.ok ||
-          !orderData.success ||
-          !orderData.order
-        ) {
-          throw new Error(
-            orderData?.error ||
-              orderData?.message ||
-              "Failed to create order."
-          );
-        }
-
-        // ======================================
-        // DATABASE ORDER ID
-        // ======================================
-
-        const databaseOrderId =
-          orderData.order.id;
-
-        console.log(
-          "DATABASE ORDER ID:",
-          databaseOrderId
-        );
-
-        if (!databaseOrderId) {
-          throw new Error(
-            "Backend did not return the database order ID."
-          );
-        }
-
-        // ======================================
-        // RAZORPAY OPTIONS
-        // ======================================
-
-        const options = {
-          key: razorpayKey,
-
-          amount:
-            orderData.order.amount,
-
-          currency:
-            orderData.order.currency ||
-            "INR",
-
-          name: "IntentCart",
-
-          description:
-            isBuyNow
-              ? "IntentCart Buy Now Order"
-              : "IntentCart Shopping Order",
-
-          order_id:
-            orderData.order
-              .razorpay_order_id,
-
-          theme: {
-            color: "#06b6d4",
-          },
-
-          handler:
-            async function (
-              response: RazorpayResponse
-            ) {
-              try {
-                setMessage(
-                  "Payment successful. Verifying payment..."
-                );
-
-                console.log(
-                  "RAZORPAY RESPONSE:",
-                  response
-                );
-
-                // =================================
-                // VERIFY PAYMENT
-                // =================================
-
-                const verifyResponse =
-                  await fetch(
-                    `${API_URL}/api/verify-payment`,
-                    {
-                      method: "POST",
-
-                      headers: {
-                        "Content-Type":
-                          "application/json",
-                      },
-
-                      body: JSON.stringify({
-                        razorpay_order_id:
-                          response.razorpay_order_id,
-
-                        razorpay_payment_id:
-                          response.razorpay_payment_id,
-
-                        razorpay_signature:
-                          response.razorpay_signature,
-                      }),
-                    }
-                  );
-
-                let verifyData: any;
-
-                try {
-                  verifyData =
-                    await verifyResponse.json();
-                } catch {
-                  throw new Error(
-                    "Invalid response from payment verification server."
-                  );
-                }
-
-                console.log(
-                  "VERIFY PAYMENT RESPONSE:",
-                  verifyData
-                );
-
-                if (
-                  !verifyResponse.ok ||
-                  !verifyData.success
-                ) {
-                  throw new Error(
-                    verifyData?.error ||
-                      verifyData?.message ||
-                      "Payment verification failed."
-                  );
-                }
-
-                // =================================
-                // FINAL ORDER ID
-                // =================================
-
-                const finalOrderId =
-                  verifyData?.order?.id ||
-                  databaseOrderId;
-
-                console.log(
-                  "FINAL DATABASE ORDER ID:",
-                  finalOrderId
-                );
-
-                if (!finalOrderId) {
-                  throw new Error(
-                    "Payment succeeded but database order ID was not returned."
-                  );
-                }
-
-                // =================================
-                // PURCHASED ITEMS
-                // =================================
-
-                const purchasedItems =
-                  Array.isArray(
-                    verifyData.items
-                  )
-                    ? verifyData.items
-                    : orderItems;
-
-                // =================================
-                // SAVE PAYMENT DETAILS
-                // =================================
-
-                const paymentDetails = {
-                  databaseOrderId:
-                    Number(
-                      finalOrderId
-                    ),
-
-                  razorpayOrderId:
-                    response.razorpay_order_id,
-
-                  razorpayPaymentId:
-                    response.razorpay_payment_id,
-
-                  amount:
-                    Number(
-                      verifyData
-                        ?.order
-                        ?.amount ||
-                        orderData.order
-                          .amount
-                    ),
-
-                  currency:
-                    verifyData
-                      ?.order
-                      ?.currency ||
-                    orderData.order
-                      .currency ||
-                    "INR",
-
-                  status:
-                    verifyData
-                      ?.order
-                      ?.status ||
-                    "paid",
-
-                  items:
-                    purchasedItems,
-
-                  paidAt:
-                    new Date().toISOString(),
-                };
-
-                localStorage.setItem(
-                  "intentcart_last_payment",
-                  JSON.stringify(
-                    paymentDetails
-                  )
-                );
-
-                console.log(
-                  "PAYMENT SAVED:",
-                  paymentDetails
-                );
-
-                // =================================
-                // CLEAR CORRECT STORAGE
-                // =================================
-
-                if (isBuyNow) {
-                  localStorage.removeItem(
-                    "intentcart_buy_now"
-                  );
-                } else {
-                  localStorage.removeItem(
-                    "intentcart_cart"
-                  );
-                }
-
-                setCart([]);
-
-                setMessage(
-                  "Payment successful! Your order has been confirmed."
-                );
-
-                // =================================
-                // REDIRECT
-                // =================================
-
-                setTimeout(() => {
-                  router.push(
-                    `/payment-success?id=${finalOrderId}`
-                  );
-                }, 700);
-              } catch (error) {
-                console.error(
-                  "Payment verification error:",
-                  error
-                );
-
-                setLoading(false);
-
-                setMessage(
-                  error instanceof Error
-                    ? error.message
-                    : "Payment verification failed."
-                );
-              }
+            headers: {
+              "Content-Type":
+                "application/json",
             },
 
-          modal: {
-            ondismiss: () => {
-              setLoading(false);
-
-              setMessage(
-                "Payment cancelled."
-              );
-            },
-          },
-        };
-
-        // ======================================
-        // OPEN RAZORPAY
-        // ======================================
-
-        const razorpay =
-          new window.Razorpay(
-            options
-          );
-
-        razorpay.on(
-          "payment.failed",
-          (response: any) => {
-            console.error(
-              "Payment failed:",
-              response
-            );
-
-            setLoading(false);
-
-            setMessage(
-              response?.error
-                ?.description ||
-                "Payment failed. Please try again."
-            );
+            body: JSON.stringify({
+              amount: total,
+              items: orderItems,
+            }),
           }
         );
 
-        razorpay.open();
-      } catch (error) {
-        console.error(
-          "Checkout error:",
-          error
-        );
+      let orderData: any;
 
-        setLoading(false);
-
-        setMessage(
-          error instanceof Error
-            ? error.message
-            : "Something went wrong during checkout."
+      try {
+        orderData =
+          await orderResponse.json();
+      } catch {
+        throw new Error(
+          "Backend returned an invalid response."
         );
       }
-    };
+
+      console.log(
+        "CREATE ORDER RESPONSE:",
+        orderData
+      );
+
+      if (
+        !orderResponse.ok ||
+        !orderData.success ||
+        !orderData.order
+      ) {
+        throw new Error(
+          orderData?.error ||
+            orderData?.message ||
+            "Failed to create order."
+        );
+      }
+
+      // ======================================
+      // DATABASE ORDER ID
+      // ======================================
+
+      const databaseOrderId =
+        orderData.order.id;
+
+      if (!databaseOrderId) {
+        throw new Error(
+          "Backend did not return the database order ID."
+        );
+      }
+
+      // ======================================
+      // RAZORPAY OPTIONS
+      // ======================================
+
+      const options = {
+        key: razorpayKey,
+
+        amount:
+          orderData.order.amount,
+
+        currency:
+          orderData.order.currency ||
+          "INR",
+
+        name: "IntentCart",
+
+        description:
+          isBuyNow
+            ? "IntentCart Buy Now Order"
+            : "IntentCart Shopping Order",
+
+        order_id:
+          orderData.order
+            .razorpay_order_id,
+
+        theme: {
+          color: "#06b6d4",
+        },
+
+        handler:
+          async function (
+            response: RazorpayResponse
+          ) {
+            try {
+              setMessage(
+                "Payment successful. Verifying payment..."
+              );
+
+              console.log(
+                "RAZORPAY RESPONSE:",
+                response
+              );
+
+              // ==================================
+              // VERIFY PAYMENT
+              // ==================================
+
+              const verifyResponse =
+                await fetch(
+                  `${API_URL}/api/verify-payment`,
+                  {
+                    method: "POST",
+
+                    headers: {
+                      "Content-Type":
+                        "application/json",
+                    },
+
+                    body: JSON.stringify({
+                      razorpay_order_id:
+                        response.razorpay_order_id,
+
+                      razorpay_payment_id:
+                        response.razorpay_payment_id,
+
+                      razorpay_signature:
+                        response.razorpay_signature,
+                    }),
+                  }
+                );
+
+              let verifyData: any;
+
+              try {
+                verifyData =
+                  await verifyResponse.json();
+              } catch {
+                throw new Error(
+                  "Invalid response from payment verification server."
+                );
+              }
+
+              console.log(
+                "VERIFY PAYMENT RESPONSE:",
+                verifyData
+              );
+
+              if (
+                !verifyResponse.ok ||
+                !verifyData.success
+              ) {
+                throw new Error(
+                  verifyData?.error ||
+                    verifyData?.message ||
+                    "Payment verification failed."
+                );
+              }
+
+              // ==================================
+              // FINAL DATABASE ORDER ID
+              // ==================================
+
+              const finalOrderId =
+                verifyData?.order?.id ||
+                databaseOrderId;
+
+              if (!finalOrderId) {
+                throw new Error(
+                  "Payment succeeded but database order ID was not returned."
+                );
+              }
+
+              // ==================================
+              // PURCHASED ITEMS
+              // ==================================
+
+              const purchasedItems =
+                Array.isArray(
+                  verifyData.items
+                )
+                  ? verifyData.items
+                  : orderItems;
+
+              // ==================================
+              // SAVE PAYMENT DETAILS
+              // ==================================
+
+              const paymentDetails = {
+                databaseOrderId:
+                  Number(finalOrderId),
+
+                razorpayOrderId:
+                  response.razorpay_order_id,
+
+                razorpayPaymentId:
+                  response.razorpay_payment_id,
+
+                amount:
+                  Number(
+                    verifyData?.order
+                      ?.amount ||
+                      orderData.order.amount
+                  ),
+
+                currency:
+                  verifyData?.order
+                    ?.currency ||
+                  orderData.order.currency ||
+                  "INR",
+
+                status:
+                  verifyData?.order
+                    ?.status ||
+                  "paid",
+
+                items:
+                  purchasedItems,
+
+                paidAt:
+                  new Date().toISOString(),
+              };
+
+              localStorage.setItem(
+                "intentcart_last_payment",
+                JSON.stringify(
+                  paymentDetails
+                )
+              );
+
+              // ==================================
+              // CLEAR CART
+              // ==================================
+
+              localStorage.removeItem(
+                "intentcart_cart"
+              );
+
+              setCart([]);
+
+              setMessage(
+                "Payment successful! Your order has been confirmed."
+              );
+
+              // ==================================
+              // REDIRECT
+              // ==================================
+
+              setTimeout(() => {
+                router.push(
+                  `/payment-success?id=${finalOrderId}`
+                );
+              }, 700);
+
+            } catch (error) {
+              console.error(
+                "Payment verification error:",
+                error
+              );
+
+              setLoading(false);
+
+              setMessage(
+                error instanceof Error
+                  ? error.message
+                  : "Payment verification failed."
+              );
+            }
+          },
+
+        modal: {
+          ondismiss: () => {
+            setLoading(false);
+
+            setMessage(
+              "Payment cancelled."
+            );
+          },
+        },
+      };
+
+      // ======================================
+      // OPEN RAZORPAY
+      // ======================================
+
+      const razorpay =
+        new window.Razorpay(options);
+
+      razorpay.on(
+        "payment.failed",
+        (response: any) => {
+          console.error(
+            "Payment failed:",
+            response
+          );
+
+          setLoading(false);
+
+          setMessage(
+            response?.error
+              ?.description ||
+              "Payment failed. Please try again."
+          );
+        }
+      );
+
+      razorpay.open();
+
+    } catch (error) {
+      console.error(
+        "Checkout error:",
+        error
+      );
+
+      setLoading(false);
+
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong during checkout."
+      );
+    }
+  };
 
   // ==========================================
   // LOADING SCREEN
@@ -812,9 +688,7 @@ export default function CartPage() {
 
           <button
             onClick={() =>
-              router.push(
-                "/products"
-              )
+              router.push("/products")
             }
             className="flex items-center gap-3"
           >
@@ -835,9 +709,7 @@ export default function CartPage() {
 
           <button
             onClick={() =>
-              router.push(
-                "/products"
-              )
+              router.push("/products")
             }
             className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold hover:border-cyan-500/50 hover:bg-slate-800"
           >
@@ -856,7 +728,7 @@ export default function CartPage() {
 
           <p className="text-xs font-bold uppercase tracking-widest text-cyan-400">
             {isBuyNow
-              ? "Quick Checkout"
+              ? "Quick Purchase"
               : "Your Shopping Cart"}
           </p>
 
@@ -872,7 +744,7 @@ export default function CartPage() {
               ? "item"
               : "items"}{" "}
             {isBuyNow
-              ? "ready for checkout"
+              ? "ready for purchase"
               : "in your cart"}
           </p>
 
@@ -896,22 +768,18 @@ export default function CartPage() {
             </div>
 
             <h2 className="mt-6 text-2xl font-bold">
-              {isBuyNow
-                ? "No item selected"
-                : "Your cart is empty"}
+              Your cart is empty
             </h2>
 
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-              {isBuyNow
-                ? "Please go back and select a product to buy."
-                : "Looks like you haven't added anything to your cart yet. Discover something you'll love."}
+              Looks like you haven't added
+              anything to your cart yet.
+              Discover something you'll love.
             </p>
 
             <button
               onClick={() =>
-                router.push(
-                  "/products"
-                )
+                router.push("/products")
               }
               className="mt-7 rounded-xl bg-cyan-500 px-6 py-3.5 text-sm font-bold text-slate-950 hover:bg-cyan-400"
             >
@@ -930,18 +798,14 @@ export default function CartPage() {
 
                 <h2 className="text-lg font-bold">
                   {isBuyNow
-                    ? "Selected Item"
+                    ? "Product"
                     : "Cart Items"}
                 </h2>
 
                 {!isBuyNow && (
                   <button
-                    onClick={
-                      clearCart
-                    }
-                    disabled={
-                      loading
-                    }
+                    onClick={clearCart}
+                    disabled={loading}
                     className="text-xs font-semibold text-red-400 hover:text-red-300 disabled:opacity-50"
                   >
                     Clear Cart
@@ -950,167 +814,138 @@ export default function CartPage() {
 
               </div>
 
-              {cart.map(
-                (item) => (
-                  <div
-                    key={
-                      item.id
-                    }
-                    className="rounded-2xl border border-slate-800 bg-slate-900 p-5"
-                  >
+              {cart.map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-2xl border border-slate-800 bg-slate-900 p-5"
+                >
 
-                    <div className="flex gap-5">
+                  <div className="flex gap-5">
 
-                      {/* ICON */}
+                    {/* ICON */}
 
-                      <button
-                        onClick={() =>
-                          router.push(
-                            `/products/${item.id}`
-                          )
-                        }
-                        className="flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-5xl hover:bg-slate-700"
-                      >
-                        {
-                          item.emoji
-                        }
-                      </button>
+                    <button
+                      onClick={() =>
+                        router.push(
+                          `/products/${item.id}`
+                        )
+                      }
+                      className="flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-5xl hover:bg-slate-700"
+                    >
+                      {item.emoji}
+                    </button>
 
-                      {/* INFO */}
+                    {/* INFO */}
 
-                      <div className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1">
 
-                        <div className="flex items-start justify-between gap-4">
+                      <div className="flex items-start justify-between gap-4">
 
-                          <div>
+                        <div>
 
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400">
-                              {
-                                item.category
-                              }
-                            </p>
-
-                            <button
-                              onClick={() =>
-                                router.push(
-                                  `/products/${item.id}`
-                                )
-                              }
-                              className="mt-1 text-left text-lg font-bold hover:text-cyan-400"
-                            >
-                              {
-                                item.name
-                              }
-                            </button>
-
-                            <p className="mt-1 text-xs text-slate-500">
-                              ⭐{" "}
-                              {
-                                item.rating
-                              }{" "}
-                              ·{" "}
-                              {
-                                item.reviews
-                              }{" "}
-                              reviews
-                            </p>
-
-                          </div>
+                          <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400">
+                            {item.category}
+                          </p>
 
                           <button
                             onClick={() =>
-                              removeItem(
-                                item.id
+                              router.push(
+                                `/products/${item.id}`
                               )
                             }
-                            disabled={
-                              loading
+                            className="mt-1 text-left text-lg font-bold hover:text-cyan-400"
+                          >
+                            {item.name}
+                          </button>
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            ⭐ {item.rating} ·{" "}
+                            {item.reviews} reviews
+                          </p>
+
+                        </div>
+
+                        {!isBuyNow && (
+                          <button
+                            onClick={() =>
+                              removeItem(item.id)
                             }
+                            disabled={loading}
                             className="text-xs font-semibold text-slate-600 hover:text-red-400 disabled:opacity-50"
                           >
                             Remove
                           </button>
+                        )}
+
+                      </div>
+
+                      <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
+
+                        {/* QUANTITY */}
+
+                        <div className="flex items-center overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
+
+                          <button
+                            onClick={() =>
+                              updateQuantity(
+                                item.id,
+                                item.quantity - 1
+                              )
+                            }
+                            disabled={loading}
+                            className="flex h-9 w-9 items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                          >
+                            −
+                          </button>
+
+                          <span className="flex h-9 w-10 items-center justify-center border-x border-slate-700 text-xs font-bold">
+                            {item.quantity}
+                          </span>
+
+                          <button
+                            onClick={() =>
+                              updateQuantity(
+                                item.id,
+                                item.quantity + 1
+                              )
+                            }
+                            disabled={loading}
+                            className="flex h-9 w-9 items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
+                          >
+                            +
+                          </button>
 
                         </div>
 
-                        <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
+                        {/* PRICE */}
 
-                          {/* QUANTITY */}
+                        <div className="text-right">
 
-                          <div className="flex items-center overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
-
-                            <button
-                              onClick={() =>
-                                updateQuantity(
-                                  item.id,
-                                  item.quantity -
-                                    1
-                                )
-                              }
-                              disabled={
-                                loading
-                              }
-                              className="flex h-9 w-9 items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                            >
-                              −
-                            </button>
-
-                            <span className="flex h-9 w-10 items-center justify-center border-x border-slate-700 text-xs font-bold">
-                              {
+                          <p className="text-lg font-black">
+                            ₹
+                            {(
+                              Number(
+                                item.price
+                              ) *
+                              Number(
                                 item.quantity
-                              }
-                            </span>
+                              )
+                            ).toLocaleString(
+                              "en-IN"
+                            )}
+                          </p>
 
-                            <button
-                              onClick={() =>
-                                updateQuantity(
-                                  item.id,
-                                  item.quantity +
-                                    1
-                                )
-                              }
-                              disabled={
-                                loading
-                              }
-                              className="flex h-9 w-9 items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                            >
-                              +
-                            </button>
-
-                          </div>
-
-                          {/* PRICE */}
-
-                          <div className="text-right">
-
-                            <p className="text-lg font-black">
+                          {item.quantity > 1 && (
+                            <p className="text-[11px] text-slate-600">
                               ₹
-                              {(
-                                Number(
-                                  item.price
-                                ) *
-                                Number(
-                                  item.quantity
-                                )
+                              {Number(
+                                item.price
                               ).toLocaleString(
                                 "en-IN"
-                              )}
+                              )}{" "}
+                              each
                             </p>
-
-                            {item.quantity >
-                              1 && (
-                              <p className="text-[11px] text-slate-600">
-                                ₹
-                                {Number(
-                                  item.price
-                                ).toLocaleString(
-                                  "en-IN"
-                                )}{" "}
-                                each
-                              </p>
-                            )}
-
-                          </div>
+                          )}
 
                         </div>
 
@@ -1119,8 +954,9 @@ export default function CartPage() {
                     </div>
 
                   </div>
-                )
-              )}
+
+                </div>
+              ))}
 
             </div>
 
@@ -1159,8 +995,7 @@ export default function CartPage() {
 
                     <span className="font-semibold">
 
-                      {delivery ===
-                      0 ? (
+                      {delivery === 0 ? (
                         <span className="text-emerald-400">
                           FREE
                         </span>
@@ -1172,8 +1007,7 @@ export default function CartPage() {
 
                   </div>
 
-                  {delivery ===
-                    0 && (
+                  {delivery === 0 && (
                     <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-400">
                       🎉 You unlocked free delivery!
                     </div>
@@ -1203,12 +1037,8 @@ export default function CartPage() {
                 {/* CHECKOUT */}
 
                 <button
-                  onClick={
-                    handleCheckout
-                  }
-                  disabled={
-                    loading
-                  }
+                  onClick={handleCheckout}
+                  disabled={loading}
                   className="mt-6 w-full rounded-xl bg-cyan-500 px-5 py-4 text-sm font-bold text-slate-950 hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {loading
@@ -1220,13 +1050,9 @@ export default function CartPage() {
 
                 <button
                   onClick={() =>
-                    router.push(
-                      "/products"
-                    )
+                    router.push("/products")
                   }
-                  disabled={
-                    loading
-                  }
+                  disabled={loading}
                   className="mt-3 w-full rounded-xl border border-slate-700 bg-slate-950 px-5 py-3.5 text-sm font-semibold text-slate-300 hover:bg-slate-800 hover:text-white disabled:opacity-50"
                 >
                   Continue Shopping
@@ -1288,3 +1114,26 @@ export default function CartPage() {
     </main>
   );
 }
+
+// ==========================================
+// PAGE WRAPPER
+// ==========================================
+// Suspense fixes the Next.js production build
+// error caused by useSearchParams().
+
+export default function CartPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+          <p className="text-sm text-slate-500">
+            Loading cart...
+          </p>
+        </main>
+      }
+    >
+      <CartContent />
+    </Suspense>
+  );
+}
+
