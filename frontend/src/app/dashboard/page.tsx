@@ -21,8 +21,17 @@ type Metrics = {
   successRate: number;
 };
 
+// ==========================================
+// BACKEND URL
+// ==========================================
+
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://intentcart-pixx.onrender.com";
+
 export default function Dashboard() {
   const [orders, setOrders] = useState<Order[]>([]);
+
   const [metrics, setMetrics] = useState<Metrics>({
     totalRevenue: 0,
     totalTransactions: 0,
@@ -54,7 +63,7 @@ export default function Dashboard() {
         // ========================================
 
         const ordersResponse = await fetch(
-          "http://https://intentcart-pixx.onrender.com/api/orders",
+          `${BACKEND_URL}/api/orders`,
           {
             cache: "no-store",
           }
@@ -62,7 +71,7 @@ export default function Dashboard() {
 
         if (!ordersResponse.ok) {
           throw new Error(
-            "Failed to fetch orders."
+            `Failed to fetch orders. Server returned ${ordersResponse.status}.`
           );
         }
 
@@ -88,7 +97,7 @@ export default function Dashboard() {
         // ========================================
 
         const metricsResponse = await fetch(
-          "http://https://intentcart-pixx.onrender.com/api/metrics",
+          `${BACKEND_URL}/api/metrics`,
           {
             cache: "no-store",
           }
@@ -96,7 +105,7 @@ export default function Dashboard() {
 
         if (!metricsResponse.ok) {
           throw new Error(
-            "Failed to fetch metrics."
+            `Failed to fetch metrics. Server returned ${metricsResponse.status}.`
           );
         }
 
@@ -144,7 +153,7 @@ export default function Dashboard() {
         setError(
           err instanceof Error
             ? err.message
-            : "Unable to load dashboard data. Make sure the backend is running."
+            : "Unable to load dashboard data."
         );
       } finally {
         setLoading(false);
@@ -169,7 +178,7 @@ export default function Dashboard() {
   const paidOrders = useMemo(() => {
     return orders.filter(
       (order) =>
-        order.status.toLowerCase() ===
+        order.status?.toLowerCase() ===
         "paid"
     );
   }, [orders]);
@@ -213,12 +222,16 @@ export default function Dashboard() {
   const formatDate = (
     date: string
   ) => {
-    return new Date(
-      date
-    ).toLocaleString("en-IN", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
+    try {
+      return new Date(
+        date
+      ).toLocaleString("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    } catch {
+      return "Unknown date";
+    }
   };
 
   // ==========================================
@@ -261,9 +274,7 @@ export default function Dashboard() {
   return (
     <main className="min-h-screen bg-slate-950 text-white">
 
-      {/* ======================================
-          NAVBAR
-      ====================================== */}
+      {/* NAVBAR */}
 
       <nav className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
 
@@ -319,15 +330,11 @@ export default function Dashboard() {
 
       </nav>
 
-      {/* ======================================
-          CONTENT
-      ====================================== */}
+      {/* CONTENT */}
 
       <section className="mx-auto max-w-7xl px-5 py-10 sm:py-14">
 
-        {/* ======================================
-            HEADER
-        ====================================== */}
+        {/* HEADER */}
 
         <div className="mb-10">
 
@@ -362,9 +369,7 @@ export default function Dashboard() {
 
         </div>
 
-        {/* ======================================
-            ERROR
-        ====================================== */}
+        {/* ERROR */}
 
         {error && (
 
@@ -399,9 +404,7 @@ export default function Dashboard() {
 
         )}
 
-        {/* ======================================
-            METRIC CARDS
-        ====================================== */}
+        {/* METRIC CARDS */}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
@@ -541,9 +544,7 @@ export default function Dashboard() {
 
         </div>
 
-        {/* ======================================
-            QUICK ACTIONS
-        ====================================== */}
+        {/* QUICK ACTIONS */}
 
         <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
 
@@ -630,9 +631,7 @@ export default function Dashboard() {
 
         </div>
 
-        {/* ======================================
-            RECENT ORDERS
-        ====================================== */}
+        {/* RECENT ORDERS */}
 
         <div className="mt-8 overflow-hidden rounded-3xl border border-slate-800 bg-slate-900">
 
@@ -712,7 +711,7 @@ export default function Dashboard() {
                             Order #{order.id}
                           </p>
 
-                          {order.status.toLowerCase() ===
+                          {order.status?.toLowerCase() ===
                           "paid" ? (
 
                             <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold uppercase text-emerald-400">
@@ -778,9 +777,7 @@ export default function Dashboard() {
 
         </div>
 
-        {/* ======================================
-            PERFORMANCE SUMMARY
-        ====================================== */}
+        {/* PERFORMANCE SUMMARY */}
 
         <div className="mt-8 rounded-3xl border border-slate-800 bg-slate-900 p-6">
 
@@ -798,8 +795,6 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
 
-            {/* SUCCESSFUL */}
-
             <div>
 
               <p className="text-sm text-slate-500">
@@ -815,8 +810,6 @@ export default function Dashboard() {
               </p>
 
             </div>
-
-            {/* OTHER */}
 
             <div>
 
@@ -834,8 +827,6 @@ export default function Dashboard() {
 
             </div>
 
-            {/* RATE */}
-
             <div>
 
               <p className="text-sm text-slate-500">
@@ -843,10 +834,7 @@ export default function Dashboard() {
               </p>
 
               <p className="mt-2 text-2xl font-black text-cyan-400">
-                {metrics.successRate.toFixed(
-                  1
-                )}
-                %
+                {metrics.successRate.toFixed(1)}%
               </p>
 
               <p className="mt-1 text-xs text-slate-600">
@@ -868,10 +856,7 @@ export default function Dashboard() {
               </span>
 
               <span className="font-bold text-emerald-400">
-                {metrics.successRate.toFixed(
-                  1
-                )}
-                %
+                {metrics.successRate.toFixed(1)}%
               </span>
 
             </div>
@@ -897,9 +882,7 @@ export default function Dashboard() {
 
         </div>
 
-        {/* ======================================
-            DATA SOURCE
-        ====================================== */}
+        {/* DATA SOURCE */}
 
         <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-900/50 p-4">
 
@@ -929,9 +912,7 @@ export default function Dashboard() {
 
       </section>
 
-      {/* ======================================
-          FOOTER
-      ====================================== */}
+      {/* FOOTER */}
 
       <footer className="border-t border-slate-800">
 
