@@ -30,13 +30,12 @@ export default function TransactionsPage() {
       setLoading(true);
       setError("");
 
-      const response = await fetch(
-        "http://lhttps://intentcart-pixx.onrender.comocalhost:5000/api/orders",
-        {
-          cache: "no-store",
-        }
-      );
-
+        const response = await fetch(
+      "https://intentcart-pixx.onrender.com/api/orders",
+      {
+        cache: "no-store",
+      }
+    );
       const data: OrdersResponse =
         await response.json();
 
