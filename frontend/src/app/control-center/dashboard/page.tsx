@@ -3,7 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-
+import { useRouter } from "next/navigation";
 type Metrics = {
   totalRevenue: number;
   totalTransactions: number;
@@ -44,68 +44,78 @@ export default function AdminDashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const fetchDashboard = useCallback(
-    async (refresh = false) => {
-      try {
-        if (refresh) {
-          setRefreshing(true);
-        } else {
-          setLoading(true);
-        }
+  const handleLogout = () => {
+    // Delete the admin authentication cookie.
+    document.cookie =
+      "intentcart_admin_auth=; path=/; max-age=0; SameSite=Lax";
 
-        setError("");
+    // Also overwrite it with an expired date for maximum browser compatibility.
+    document.cookie =
+      "intentcart_admin_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
 
-        const [metricsResponse, ordersResponse] =
-          await Promise.all([
-            fetch(`${BACKEND_URL}/api/metrics`, {
-              cache: "no-store",
-            }),
-            fetch(`${BACKEND_URL}/api/orders`, {
-              cache: "no-store",
-            }),
-          ]);
+    // Send the administrator back to the login page.
+    window.location.href = "/control-center";
+  };
 
-        if (!metricsResponse.ok) {
-          throw new Error("Unable to load metrics");
-        }
-
-        if (!ordersResponse.ok) {
-          throw new Error("Unable to load orders");
-        }
-
-        const metricsResult: MetricsResponse =
-          await metricsResponse.json();
-
-        const ordersResult: OrdersResponse =
-          await ordersResponse.json();
-
-        if (!metricsResult.success || !metricsResult.metrics) {
-          throw new Error(
-            metricsResult.error || "Metrics unavailable"
-          );
-        }
-
-        setMetrics(metricsResult.metrics);
-
-        if (
-          ordersResult.success &&
-          Array.isArray(ordersResult.orders)
-        ) {
-          setOrders(ordersResult.orders);
-        }
-      } catch (err) {
-        console.error("Dashboard error:", err);
-
-        setError(
-          "Unable to load dashboard data. Make sure your backend is running."
-        );
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+  const fetchDashboard = useCallback(async (refresh = false) => {
+    try {
+      if (refresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
       }
-    },
-    []
-  );
+
+      setError("");
+
+      const [metricsResponse, ordersResponse] =
+        await Promise.all([
+          fetch(`${BACKEND_URL}/api/metrics`, {
+            cache: "no-store",
+          }),
+          fetch(`${BACKEND_URL}/api/orders`, {
+            cache: "no-store",
+          }),
+        ]);
+
+      if (!metricsResponse.ok) {
+        throw new Error("Unable to load metrics");
+      }
+
+      if (!ordersResponse.ok) {
+        throw new Error("Unable to load orders");
+      }
+
+      const metricsResult: MetricsResponse =
+        await metricsResponse.json();
+
+      const ordersResult: OrdersResponse =
+        await ordersResponse.json();
+
+      if (!metricsResult.success || !metricsResult.metrics) {
+        throw new Error(
+          metricsResult.error || "Metrics unavailable"
+        );
+      }
+
+      setMetrics(metricsResult.metrics);
+
+      if (
+        ordersResult.success &&
+        Array.isArray(ordersResult.orders)
+      ) {
+        setOrders(ordersResult.orders);
+      }
+    } catch (err) {
+      console.error("Dashboard error:", err);
+
+      setError(
+        "Unable to load dashboard data. Make sure your backend is running."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
     fetchDashboard();
@@ -227,23 +237,33 @@ export default function AdminDashboardPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => fetchDashboard(true)}
-            disabled={refreshing}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-semibold transition hover:border-cyan-500/50 hover:bg-slate-800 disabled:opacity-60"
-          >
-            <span
-              className={
-                refreshing ? "animate-spin" : ""
-              }
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              onClick={() => fetchDashboard(true)}
+              disabled={refreshing}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-semibold transition hover:border-cyan-500/50 hover:bg-slate-800 disabled:opacity-60"
             >
-              ↻
-            </span>
+              <span
+                className={
+                  refreshing ? "animate-spin" : ""
+                }
+              >
+                ↻
+              </span>
 
-            {refreshing
-              ? "Refreshing..."
-              : "Refresh Dashboard"}
-          </button>
+              {refreshing
+                ? "Refreshing..."
+                : "Refresh Dashboard"}
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-5 py-3 text-sm font-semibold text-red-400 transition hover:border-red-500/60 hover:bg-red-500/20"
+            >
+              ⇥
+              Logout
+            </button>
+          </div>
         </header>
 
         {/* SYSTEM STATUS */}
@@ -373,7 +393,7 @@ export default function AdminDashboardPage() {
             </div>
 
             <Link
-              href="/admin/transactions"
+              href="/control-center/transactions"
               className="inline-flex items-center justify-center rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-xs font-semibold text-cyan-400 transition hover:border-cyan-500/50 hover:bg-slate-800"
             >
               View All Transactions →
@@ -423,7 +443,11 @@ export default function AdminDashboardPage() {
                   {recentOrders.map((order) => (
                     <tr
                       key={order.id}
-                      className="border-b border-slate-800/70 transition hover:bg-slate-800/30"
+                      onClick={() =>
+                        (window.location.href =
+                          `/order/${order.id}`)
+                      }
+                      className="cursor-pointer border-b border-slate-800/70 transition hover:bg-slate-800/30"
                     >
                       <td className="px-6 py-5">
                         <p className="font-semibold">
@@ -500,14 +524,14 @@ export default function AdminDashboardPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             <AdminTool
-              href="/admin/transactions"
+              href="/control-center/transactions"
               icon="💳"
               title="Transaction History"
               description="View, search and inspect all payment transactions."
             />
 
             <AdminTool
-              href="/admin/ai-insights"
+              href="/ai-insights"
               icon="✦"
               title="AI Finance Controller"
               description="Analyze revenue, risk, payment health and AI recommendations."
@@ -737,3 +761,7 @@ function StatusBadge({
     </span>
   );
 }
+
+
+
+

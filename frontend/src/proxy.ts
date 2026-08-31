@@ -1,25 +1,24 @@
-
 import { NextRequest, NextResponse } from "next/server";
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Protect all Control Center pages except the login page.
-  if (
-    pathname.startsWith("/control-center") &&
-    pathname !== "/control-center"
-  ) {
-    const adminAuth = request.cookies.get(
+  console.log("🔥 PROXY RUNNING:", pathname);
+
+  // Protect the entire control center
+  if (pathname.startsWith("/control-center/")) {
+    const auth = request.cookies.get(
       "intentcart_admin_auth"
     )?.value;
 
-    if (adminAuth !== "true") {
-      const loginUrl = new URL(
-        "/control-center",
-        request.url
-      );
+    console.log("🔥 ADMIN AUTH:", auth ? "PRESENT" : "MISSING");
 
-      return NextResponse.redirect(loginUrl);
+    if (auth !== "true") {
+      console.log("🔥 REDIRECTING TO ADMIN LOGIN");
+
+      return NextResponse.redirect(
+        new URL("/control-center", request.url)
+      );
     }
   }
 

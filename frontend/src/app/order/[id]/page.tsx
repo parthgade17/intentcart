@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -26,10 +27,14 @@ type Order = {
 
 type OrderResponse = {
   success: boolean;
-  order: Order;
-  items: OrderItem[];
+  order?: Order;
+  items?: OrderItem[];
   error?: string;
 };
+
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "http://localhost:5000";
 
 export default function OrderDetailsPage({
   params,
@@ -46,10 +51,14 @@ export default function OrderDetailsPage({
       try {
         const { id } = await params;
 
+        if (!id || !/^\d+$/.test(id)) {
+          throw new Error("Invalid order ID");
+        }
+
         console.log("ORDER ID:", id);
 
         const response = await fetch(
-         `https://intentcart-pixx.onrender.com/api/orders/${id}`,
+          `${BACKEND_URL}/api/orders/${id}`,
           {
             cache: "no-store",
           }
@@ -61,7 +70,7 @@ export default function OrderDetailsPage({
         console.log("FULL API RESPONSE:", data);
         console.log("ITEMS:", data.items);
 
-        if (!response.ok || !data.success) {
+        if (!response.ok || !data.success || !data.order) {
           throw new Error(
             data.error || "Failed to load order"
           );
@@ -92,10 +101,16 @@ export default function OrderDetailsPage({
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-950 p-10 text-white">
-        <div className="mx-auto max-w-5xl">
-          <p className="text-slate-400">
-            Loading order details...
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
+        <div className="text-center">
+          <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-4 border-slate-700 border-t-cyan-400" />
+
+          <h2 className="text-xl font-semibold">
+            Loading Order Details
+          </h2>
+
+          <p className="mt-2 text-sm text-slate-400">
+            Retrieving transaction information...
           </p>
         </div>
       </main>
@@ -106,12 +121,11 @@ export default function OrderDetailsPage({
     return (
       <main className="min-h-screen bg-slate-950 p-6 text-white md:p-10">
         <div className="mx-auto max-w-5xl">
-
           <Link
-            href="/dashboard"
-            className="mb-6 inline-block text-blue-400 hover:text-blue-300"
+            href="/control-center/dashboard"
+            className="mb-6 inline-flex items-center text-sm text-cyan-400 transition hover:text-cyan-300"
           >
-            ← Back to Dashboard
+            ← Back to Admin Dashboard
           </Link>
 
           <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-6">
@@ -122,83 +136,103 @@ export default function OrderDetailsPage({
             <p className="mt-2 text-slate-300">
               {error || "Order not found"}
             </p>
-          </div>
 
+            <Link
+              href="/control-center/transactions"
+              className="mt-5 inline-flex rounded-xl bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/20"
+            >
+              View Transactions
+            </Link>
+          </div>
         </div>
       </main>
     );
   }
 
   const amount = Number(order.amount);
-
   const orderDate = new Date(order.created_at);
+
+  const normalizedStatus =
+    order.status?.toLowerCase();
+
+  const statusClass =
+    normalizedStatus === "paid"
+      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+      : normalizedStatus === "created"
+      ? "border-yellow-500/20 bg-yellow-500/10 text-yellow-400"
+      : "border-red-500/20 bg-red-500/10 text-red-400";
+
+  const statusLabel =
+    order.status?.toUpperCase() || "UNKNOWN";
 
   return (
     <main className="min-h-screen bg-slate-950 p-6 text-white md:p-10">
-
       <div className="mx-auto max-w-5xl">
 
         {/* HEADER */}
 
         <div className="mb-8">
+          <div className="mb-5 flex flex-wrap gap-4">
+            <Link
+              href="/control-center/dashboard"
+              className="text-sm text-cyan-400 transition hover:text-cyan-300"
+            >
+              ← Admin Dashboard
+            </Link>
 
-          <Link
-            href="/dashboard"
-            className="mb-5 inline-block text-sm text-blue-400 hover:text-blue-300"
-          >
-            ← Back to Dashboard
-          </Link>
+            <Link
+              href="/control-center/transactions"
+              className="text-sm text-slate-400 transition hover:text-white"
+            >
+              Transactions →
+            </Link>
+          </div>
 
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-
             <div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-cyan-400">
+                Transaction Details
+              </p>
 
-              <h1 className="text-3xl font-bold">
+              <h1 className="mt-2 text-3xl font-bold">
                 Order #{order.id}
               </h1>
 
               <p className="mt-1 text-slate-400">
-                Complete transaction details
+                Complete payment and order information
               </p>
-
             </div>
 
             <div
-              className={`w-fit rounded-full px-4 py-2 text-sm font-semibold ${
-                order.status === "paid"
-                  ? "bg-emerald-500/10 text-emerald-400"
-                  : order.status === "created"
-                  ? "bg-yellow-500/10 text-yellow-400"
-                  : "bg-red-500/10 text-red-400"
-              }`}
+              className={`w-fit rounded-full border px-4 py-2 text-sm font-semibold ${statusClass}`}
             >
-              {order.status.toUpperCase()}
+              {statusLabel}
             </div>
-
           </div>
-
         </div>
 
         {/* SUMMARY */}
 
-        <div className="mb-6 grid gap-4 md:grid-cols-2">
-
+        <section className="mb-6 grid gap-4 md:grid-cols-3">
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-
             <p className="text-sm text-slate-400">
               Payment Status
             </p>
 
-            <p className="mt-2 text-2xl font-bold text-emerald-400">
-              {order.status === "paid"
-                ? "Paid"
-                : order.status}
+            <p
+              className={`mt-2 text-2xl font-bold ${
+                normalizedStatus === "paid"
+                  ? "text-emerald-400"
+                  : normalizedStatus === "created"
+                  ? "text-yellow-400"
+                  : "text-red-400"
+              }`}
+            >
+              {order.status}
             </p>
-
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-
             <p className="text-sm text-slate-400">
               Total Amount
             </p>
@@ -214,15 +248,26 @@ export default function OrderDetailsPage({
             <p className="mt-1 text-sm text-slate-500">
               {order.currency}
             </p>
-
           </div>
 
-        </div>
+          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
+            <p className="text-sm text-slate-400">
+              Products
+            </p>
+
+            <p className="mt-2 text-2xl font-bold">
+              {items.length}
+            </p>
+
+            <p className="mt-1 text-sm text-slate-500">
+              Items in this order
+            </p>
+          </div>
+        </section>
 
         {/* TRANSACTION INFORMATION */}
 
-        <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6">
-
+        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6">
           <h2 className="mb-6 text-xl font-bold">
             Transaction Information
           </h2>
@@ -231,7 +276,7 @@ export default function OrderDetailsPage({
 
             <div>
               <p className="text-sm text-slate-400">
-                Order ID
+                Internal Order ID
               </p>
 
               <p className="mt-1 font-semibold">
@@ -241,10 +286,20 @@ export default function OrderDetailsPage({
 
             <div>
               <p className="text-sm text-slate-400">
+                Order Status
+              </p>
+
+              <p className="mt-1 font-semibold">
+                {order.status}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-slate-400">
                 Razorpay Order ID
               </p>
 
-              <p className="mt-1 break-all font-mono text-sm">
+              <p className="mt-1 break-all font-mono text-sm text-slate-200">
                 {order.razorpay_order_id}
               </p>
             </div>
@@ -254,19 +309,9 @@ export default function OrderDetailsPage({
                 Razorpay Payment ID
               </p>
 
-              <p className="mt-1 break-all font-mono text-sm">
+              <p className="mt-1 break-all font-mono text-sm text-slate-200">
                 {order.razorpay_payment_id ||
                   "Not available"}
-              </p>
-            </div>
-
-            <div>
-              <p className="text-sm text-slate-400">
-                Status
-              </p>
-
-              <p className="mt-1 font-semibold">
-                {order.status}
               </p>
             </div>
 
@@ -277,6 +322,20 @@ export default function OrderDetailsPage({
 
               <p className="mt-1 font-semibold">
                 {order.currency}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-slate-400">
+                Amount
+              </p>
+
+              <p className="mt-1 font-semibold">
+                ₹
+                {amount.toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
               </p>
             </div>
 
@@ -304,51 +363,41 @@ export default function OrderDetailsPage({
             </div>
 
           </div>
-
-        </div>
+        </section>
 
         {/* ORDER CONTENTS */}
 
-        <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6">
+        <section className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-6">
+          <div className="mb-6">
+            <p className="text-xs font-semibold uppercase tracking-widest text-purple-400">
+              Order Contents
+            </p>
 
-          <p className="text-sm text-slate-400">
-            Order Contents
-          </p>
-
-          <h2 className="mt-1 mb-6 text-2xl font-bold">
-            Products Purchased
-          </h2>
+            <h2 className="mt-1 text-2xl font-bold">
+              Products Purchased
+            </h2>
+          </div>
 
           {items.length > 0 ? (
-
             <div className="space-y-4">
-
               {items.map((item) => {
-
                 const price = Number(item.price);
-
-                const quantity =
-                  Number(item.quantity);
-
-                const total =
-                  price * quantity;
+                const quantity = Number(item.quantity);
+                const total = price * quantity;
 
                 return (
                   <div
                     key={item.id}
                     className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-950 p-5 md:flex-row md:items-center md:justify-between"
                   >
-
-                    {/* PRODUCT INFO */}
+                    {/* PRODUCT */}
 
                     <div className="flex items-center gap-4">
-
                       <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-slate-800 text-3xl">
                         {item.emoji || "📦"}
                       </div>
 
                       <div>
-
                         <h3 className="text-lg font-semibold">
                           {item.name}
                         </h3>
@@ -366,15 +415,12 @@ export default function OrderDetailsPage({
                         <p className="mt-1 text-sm text-slate-500">
                           Quantity: {quantity}
                         </p>
-
                       </div>
-
                     </div>
 
                     {/* PRICE */}
 
                     <div className="text-left md:text-right">
-
                       <p className="text-xl font-bold">
                         ₹
                         {price.toLocaleString("en-IN", {
@@ -391,42 +437,30 @@ export default function OrderDetailsPage({
                         })}{" "}
                         total
                       </p>
-
                     </div>
-
                   </div>
                 );
               })}
-
             </div>
-
           ) : (
-
             <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/5 p-6">
-
               <p className="font-semibold text-yellow-400">
                 No product details available
               </p>
 
               <p className="mt-2 text-sm text-slate-400">
-                Product information was not stored for
-                this order.
+                Product information was not stored for this
+                order.
               </p>
-
             </div>
-
           )}
-
-        </div>
+        </section>
 
         {/* TOTAL */}
 
-        <div className="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-6">
-
+        <section className="rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
             <div>
-
               <p className="text-sm text-slate-400">
                 Order Total
               </p>
@@ -434,7 +468,6 @@ export default function OrderDetailsPage({
               <p className="mt-1 text-slate-300">
                 Final amount recorded in PostgreSQL
               </p>
-
             </div>
 
             <p className="text-2xl font-bold">
@@ -444,19 +477,16 @@ export default function OrderDetailsPage({
                 maximumFractionDigits: 2,
               })}
             </p>
-
           </div>
-
-        </div>
+        </section>
 
         {/* FOOTER */}
 
-        <div className="mt-8 text-center text-sm text-slate-600">
-          IntentCart • PostgreSQL Order Intelligence
-        </div>
+        <footer className="mt-8 border-t border-slate-800 pt-6 text-center text-xs text-slate-600">
+          IntentCart Admin • PostgreSQL + Razorpay
+        </footer>
 
       </div>
-
     </main>
   );
 }

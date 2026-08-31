@@ -1,7 +1,7 @@
 
 "use client";
 
-import { FormEvent, useState } from "react";
+import { useState } from "react";
 
 export default function AdminLoginPage() {
   const [username, setUsername] = useState("");
@@ -9,85 +9,39 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (
-    event: FormEvent<HTMLFormElement>
-  ) => {
+  const handleLogin = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     setError("");
     setLoading(true);
 
-    try {
-      console.log("[browser] Sending login request...");
+    const ADMIN_USERNAME = "admin";
+    const ADMIN_PASSWORD = "IntentCart@2026";
 
-      const response = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          username: username.trim(),
-          password,
-        }),
-      });
-
-      console.log(
-        "[browser] Login API status:",
-        response.status
-      );
-
-      const contentType =
-        response.headers.get("content-type") || "";
-
-      if (!contentType.includes("application/json")) {
-        console.error(
-          "[browser] Login API did not return JSON."
-        );
-
-        throw new Error(
-          `Login API returned ${response.status}`
-        );
-      }
-
-      const data = await response.json();
-
-      console.log(
-        "[browser] Login API response:",
-        data
-      );
-
-      if (!response.ok || !data.success) {
-        throw new Error(
-          data.error || "Invalid username or password."
-        );
-      }
-
-      console.log(
-        "[browser] Login successful. Redirecting..."
-      );
-
-      window.location.href =
-        "/control-center/dashboard";
-    } catch (error) {
-      console.error(
-        "[browser] LOGIN ERROR:",
-        error
-      );
-
-      setError(
-        error instanceof Error
-          ? error.message
-          : "Unable to sign in. Please try again."
-      );
-
+    if (
+      username.trim() !== ADMIN_USERNAME ||
+      password !== ADMIN_PASSWORD
+    ) {
+      setError("Invalid admin username or password.");
       setLoading(false);
+      return;
     }
+
+    // Create authentication cookie.
+    document.cookie =
+      "intentcart_admin_auth=true; path=/; max-age=86400; SameSite=Lax";
+
+    // Redirect to the protected admin dashboard.
+    setTimeout(() => {
+      window.location.href = "/control-center/dashboard";
+    }, 100);
   };
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-white">
       <div className="w-full max-w-md">
 
+        {/* Header */}
         <div className="mb-8 text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 text-2xl text-cyan-400">
             ✦
@@ -102,10 +56,12 @@ export default function AdminLoginPage() {
           </p>
         </div>
 
+        {/* Login Form */}
         <form
           onSubmit={handleLogin}
           className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl"
         >
+          {/* Username */}
           <div>
             <label className="text-sm font-medium text-slate-300">
               Username
@@ -124,6 +80,7 @@ export default function AdminLoginPage() {
             />
           </div>
 
+          {/* Password */}
           <div className="mt-5">
             <label className="text-sm font-medium text-slate-300">
               Password
@@ -142,23 +99,24 @@ export default function AdminLoginPage() {
             />
           </div>
 
+          {/* Error */}
           {error && (
             <div className="mt-5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
               {error}
             </div>
           )}
 
+          {/* Login Button */}
           <button
             type="submit"
             disabled={loading}
             className="mt-6 w-full rounded-xl bg-cyan-500 px-4 py-3 text-sm font-bold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {loading
-              ? "Signing in..."
-              : "Admin Login"}
+            {loading ? "Signing in..." : "Admin Login"}
           </button>
         </form>
 
+        {/* Footer */}
         <p className="mt-6 text-center text-xs text-slate-600">
           IntentCart • Administrator Portal
         </p>
@@ -167,4 +125,3 @@ export default function AdminLoginPage() {
     </main>
   );
 }
-
