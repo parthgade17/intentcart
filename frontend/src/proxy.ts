@@ -5,16 +5,20 @@ export function proxy(request: NextRequest) {
 
   console.log("🔥 PROXY RUNNING:", pathname);
 
-  // Protect the entire control center
-  if (pathname.startsWith("/control-center/")) {
+  // Protect every page inside /control-center/
+  // except the login page itself.
+  if (
+    pathname.startsWith("/control-center/") &&
+    pathname !== "/control-center"
+  ) {
     const auth = request.cookies.get(
       "intentcart_admin_auth"
     )?.value;
 
-    console.log("🔥 ADMIN AUTH:", auth ? "PRESENT" : "MISSING");
+    console.log("🔥 ADMIN AUTH:", auth);
 
     if (auth !== "true") {
-      console.log("🔥 REDIRECTING TO ADMIN LOGIN");
+      console.log("🔥 NOT AUTHENTICATED — REDIRECTING");
 
       return NextResponse.redirect(
         new URL("/control-center", request.url)

@@ -44,16 +44,15 @@ export default function AdminDashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const handleLogout = () => {
-    // Delete the admin authentication cookie.
-    document.cookie =
-      "intentcart_admin_auth=; path=/; max-age=0; SameSite=Lax";
+    const handleLogout = async () => {
+    try {
+      await fetch("/api/admin/logout", {
+        method: "POST",
+      });
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
 
-    // Also overwrite it with an expired date for maximum browser compatibility.
-    document.cookie =
-      "intentcart_admin_auth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax";
-
-    // Send the administrator back to the login page.
     window.location.href = "/control-center";
   };
 

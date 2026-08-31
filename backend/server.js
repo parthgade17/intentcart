@@ -11,6 +11,19 @@ dotenv.config();
 const { Pool } = pg;
 
 // ======================================================
+// ENVIRONMENT VARIABLES
+// ======================================================
+
+const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET;
+
+if (!ADMIN_API_SECRET) {
+  console.error(
+    "❌ ADMIN_API_SECRET is missing from backend .env"
+  );
+  process.exit(1);
+}
+
+// ======================================================
 // POSTGRESQL CONNECTION
 // ======================================================
 
@@ -31,8 +44,34 @@ pool.on("error", (error) => {
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: true,
+    credentials: true,
+  })
+);
+
 app.use(express.json());
+
+// ======================================================
+// ADMIN API SECURITY
+// ======================================================
+
+function requireAdmin(req, res, next) {
+  const providedSecret = req.headers["x-admin-api-secret"];
+
+  if (
+    !providedSecret ||
+    providedSecret !== ADMIN_API_SECRET
+  ) {
+    return res.status(401).json({
+      success: false,
+      error: "Unauthorized admin API request",
+    });
+  }
+
+  next();
+}
 
 // ======================================================
 // RAZORPAY
@@ -80,7 +119,9 @@ app.get("/api/db-test", async (req, res) => {
 
     res.status(500).json({
       success: false,
-      error: error.message || "Database connection failed",
+      error:
+        error.message ||
+        "Database connection failed",
     });
   }
 });
@@ -142,6 +183,7 @@ async function createTables() {
 
 // ======================================================
 // CREATE RAZORPAY ORDER
+// PUBLIC - CUSTOMERS NEED THIS
 // ======================================================
 
 app.post("/api/create-order", async (req, res) => {
@@ -184,13 +226,16 @@ app.post("/api/create-order", async (req, res) => {
       }
     }
 
-    const amountInPaise = Math.round(numericAmount * 100);
+    const amountInPaise = Math.round(
+      numericAmount * 100
+    );
 
-    const razorpayOrder = await razorpay.orders.create({
-      amount: amountInPaise,
-      currency: "INR",
-      receipt: `intentcart_${Date.now()}`,
-    });
+    const razorpayOrder =
+      await razorpay.orders.create({
+        amount: amountInPaise,
+        currency: "INR",
+        receipt: `intentcart_${Date.now()}`,
+      });
 
     const client = await pool.connect();
 
@@ -217,7 +262,8 @@ app.post("/api/create-order", async (req, res) => {
         ]
       );
 
-      const databaseOrder = orderResult.rows[0];
+      const databaseOrder =
+        orderResult.rows[0];
 
       for (const item of items) {
         await client.query(
@@ -256,9 +302,11 @@ app.post("/api/create-order", async (req, res) => {
         success: true,
         order: {
           id: databaseOrder.id,
-          razorpay_order_id: razorpayOrder.id,
+          razorpay_order_id:
+            razorpayOrder.id,
           amount: razorpayOrder.amount,
-          currency: razorpayOrder.currency,
+          currency:
+            razorpayOrder.currency,
         },
         items,
       });
@@ -275,7 +323,10 @@ app.post("/api/create-order", async (req, res) => {
       client.release();
     }
   } catch (error) {
-    console.error("Create order error:", error);
+    console.error(
+      "Create order error:",
+      error
+    );
 
     res.status(500).json({
       success: false,
@@ -288,447 +339,540 @@ app.post("/api/create-order", async (req, res) => {
 
 // ======================================================
 // VERIFY PAYMENT
+// PUBLIC - CUSTOMERS NEED THIS
 // ======================================================
 
-app.post("/api/verify-payment", async (req, res) => {
-  try {
-    const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-    } = req.body;
-
-    if (
-      !razorpay_order_id ||
-      !razorpay_payment_id ||
-      !razorpay_signature
-    ) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing payment verification details",
-      });
-    }
-
-    const generatedSignature = crypto
-      .createHmac(
-        "sha256",
-        process.env.RAZORPAY_KEY_SECRET
-      )
-      .update(
-        `${razorpay_order_id}|${razorpay_payment_id}`
-      )
-      .digest("hex");
-
-    if (generatedSignature !== razorpay_signature) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid payment signature",
-      });
-    }
-
-    const orderResult = await pool.query(
-      `
-      UPDATE orders
-      SET
-        razorpay_payment_id = $1,
-        status = 'paid'
-      WHERE razorpay_order_id = $2
-      RETURNING *
-      `,
-      [
-        razorpay_payment_id,
+app.post(
+  "/api/verify-payment",
+  async (req, res) => {
+    try {
+      const {
         razorpay_order_id,
-      ]
-    );
+        razorpay_payment_id,
+        razorpay_signature,
+      } = req.body;
 
-    if (orderResult.rowCount === 0) {
-      return res.status(404).json({
+      if (
+        !razorpay_order_id ||
+        !razorpay_payment_id ||
+        !razorpay_signature
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Missing payment verification details",
+        });
+      }
+
+      const generatedSignature =
+        crypto
+          .createHmac(
+            "sha256",
+            process.env.RAZORPAY_KEY_SECRET
+          )
+          .update(
+            `${razorpay_order_id}|${razorpay_payment_id}`
+          )
+          .digest("hex");
+
+      if (
+        generatedSignature !==
+        razorpay_signature
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Invalid payment signature",
+        });
+      }
+
+      const orderResult =
+        await pool.query(
+          `
+          UPDATE orders
+          SET
+            razorpay_payment_id = $1,
+            status = 'paid'
+          WHERE razorpay_order_id = $2
+          RETURNING *
+          `,
+          [
+            razorpay_payment_id,
+            razorpay_order_id,
+          ]
+        );
+
+      if (orderResult.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          error:
+            "Order not found in database",
+        });
+      }
+
+      const order =
+        orderResult.rows[0];
+
+      const itemsResult =
+        await pool.query(
+          `
+          SELECT
+            id,
+            product_id,
+            name,
+            category,
+            price,
+            quantity,
+            emoji
+          FROM order_items
+          WHERE order_id = $1
+          ORDER BY id ASC
+          `,
+          [order.id]
+        );
+
+      res.json({
+        success: true,
+        message:
+          "Payment verified and saved successfully",
+        order,
+        items: itemsResult.rows,
+      });
+    } catch (error) {
+      console.error(
+        "Payment verification error:",
+        error
+      );
+
+      res.status(500).json({
         success: false,
-        error: "Order not found in database",
+        error:
+          error.message ||
+          "Payment verification failed",
       });
     }
-
-    const order = orderResult.rows[0];
-
-    const itemsResult = await pool.query(
-      `
-      SELECT
-        id,
-        product_id,
-        name,
-        category,
-        price,
-        quantity,
-        emoji
-      FROM order_items
-      WHERE order_id = $1
-      ORDER BY id ASC
-      `,
-      [order.id]
-    );
-
-    res.json({
-      success: true,
-      message: "Payment verified and saved successfully",
-      order,
-      items: itemsResult.rows,
-    });
-  } catch (error) {
-    console.error(
-      "Payment verification error:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      error:
-        error.message ||
-        "Payment verification failed",
-    });
   }
-});
+);
 
 // ======================================================
 // GET ALL ORDERS
+// PROTECTED ADMIN ENDPOINT
 // ======================================================
 
-app.get("/api/orders", async (req, res) => {
-  try {
-    const orderResult = await pool.query(`
-      SELECT
-        id,
-        razorpay_order_id,
-        razorpay_payment_id,
-        amount,
-        currency,
-        status,
-        created_at
-      FROM orders
-      ORDER BY created_at DESC
-    `);
-
-    const orders = orderResult.rows;
-
-    if (orders.length > 0) {
-      const itemsResult = await pool.query(`
+app.get(
+  "/api/orders",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const orderResult =
+        await pool.query(`
         SELECT
           id,
-          order_id,
-          product_id,
-          name,
-          category,
-          price,
-          quantity,
-          emoji
-        FROM order_items
-        ORDER BY id ASC
+          razorpay_order_id,
+          razorpay_payment_id,
+          amount,
+          currency,
+          status,
+          created_at
+        FROM orders
+        ORDER BY created_at DESC
       `);
 
-      for (const order of orders) {
-        order.items = itemsResult.rows.filter(
-          (item) => item.order_id === order.id
-        );
+      const orders =
+        orderResult.rows;
+
+      if (orders.length > 0) {
+        const itemsResult =
+          await pool.query(`
+          SELECT
+            id,
+            order_id,
+            product_id,
+            name,
+            category,
+            price,
+            quantity,
+            emoji
+          FROM order_items
+          ORDER BY id ASC
+        `);
+
+        for (const order of orders) {
+          order.items =
+            itemsResult.rows.filter(
+              (item) =>
+                item.order_id ===
+                order.id
+            );
+        }
+      } else {
+        for (const order of orders) {
+          order.items = [];
+        }
       }
-    } else {
-      for (const order of orders) {
-        order.items = [];
-      }
+
+      res.json({
+        success: true,
+        orders,
+      });
+    } catch (error) {
+      console.error(
+        "GET /api/orders error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        error:
+          error.message ||
+          "Failed to fetch transaction history",
+      });
     }
-
-    res.json({
-      success: true,
-      orders,
-    });
-  } catch (error) {
-    console.error(
-      "GET /api/orders error:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      error:
-        error.message ||
-        "Failed to fetch transaction history",
-    });
   }
-});
+);
 
 // ======================================================
 // GET SINGLE ORDER
+// PROTECTED ADMIN ENDPOINT
 // ======================================================
 
-app.get("/api/orders/:id", async (req, res) => {
-  try {
-    const orderId = Number(req.params.id);
+app.get(
+  "/api/orders/:id",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const orderId =
+        Number(req.params.id);
 
-    if (!Number.isInteger(orderId)) {
-      return res.status(400).json({
+      if (!Number.isInteger(orderId)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid order ID",
+        });
+      }
+
+      const orderResult =
+        await pool.query(
+          `
+          SELECT
+            id,
+            razorpay_order_id,
+            razorpay_payment_id,
+            amount,
+            currency,
+            status,
+            created_at
+          FROM orders
+          WHERE id = $1
+          `,
+          [orderId]
+        );
+
+      if (
+        orderResult.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          error: "Order not found",
+        });
+      }
+
+      const order =
+        orderResult.rows[0];
+
+      const itemsResult =
+        await pool.query(
+          `
+          SELECT
+            id,
+            product_id,
+            name,
+            category,
+            price,
+            quantity,
+            emoji
+          FROM order_items
+          WHERE order_id = $1
+          ORDER BY id ASC
+          `,
+          [orderId]
+        );
+
+      res.json({
+        success: true,
+        order,
+        items: itemsResult.rows,
+      });
+    } catch (error) {
+      console.error(
+        "GET SINGLE ORDER error:",
+        error
+      );
+
+      res.status(500).json({
         success: false,
-        error: "Invalid order ID",
+        error:
+          error.message ||
+          "Failed to fetch order",
       });
     }
-
-    const orderResult = await pool.query(
-      `
-      SELECT
-        id,
-        razorpay_order_id,
-        razorpay_payment_id,
-        amount,
-        currency,
-        status,
-        created_at
-      FROM orders
-      WHERE id = $1
-      `,
-      [orderId]
-    );
-
-    if (orderResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: "Order not found",
-      });
-    }
-
-    const order = orderResult.rows[0];
-
-    const itemsResult = await pool.query(
-      `
-      SELECT
-        id,
-        product_id,
-        name,
-        category,
-        price,
-        quantity,
-        emoji
-      FROM order_items
-      WHERE order_id = $1
-      ORDER BY id ASC
-      `,
-      [orderId]
-    );
-
-    res.json({
-      success: true,
-      order,
-      items: itemsResult.rows,
-    });
-  } catch (error) {
-    console.error(
-      "GET SINGLE ORDER error:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      error:
-        error.message ||
-        "Failed to fetch order",
-    });
   }
-});
+);
 
 // ======================================================
 // LIVE TRANSACTION METRICS
+// PROTECTED ADMIN ENDPOINT
 // ======================================================
 
-app.get("/api/metrics", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT
-        amount,
-        status
-      FROM orders
-    `);
+app.get(
+  "/api/metrics",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(`
+        SELECT
+          amount,
+          status
+        FROM orders
+      `);
 
-    const orders = result.rows;
+      const orders =
+        result.rows;
 
-    const totalTransactions = orders.length;
+      const totalTransactions =
+        orders.length;
 
-    const successfulOrders = orders.filter(
-      (order) => order.status === "paid"
-    );
+      const successfulOrders =
+        orders.filter(
+          (order) =>
+            order.status === "paid"
+        );
 
-    const successfulCount =
-      successfulOrders.length;
+      const successfulCount =
+        successfulOrders.length;
 
-    const totalRevenue =
-      successfulOrders.reduce(
-        (total, order) =>
-          total + Number(order.amount),
-        0
+      const totalRevenue =
+        successfulOrders.reduce(
+          (total, order) =>
+            total +
+            Number(order.amount),
+          0
+        );
+
+      const averageOrderValue =
+        successfulCount > 0
+          ? totalRevenue /
+            successfulCount
+          : 0;
+
+      const successRate =
+        totalTransactions > 0
+          ? (successfulCount /
+              totalTransactions) *
+            100
+          : 0;
+
+      res.json({
+        success: true,
+        metrics: {
+          totalRevenue: Number(
+            totalRevenue.toFixed(2)
+          ),
+          totalTransactions,
+          averageOrderValue:
+            Number(
+              averageOrderValue.toFixed(
+                2
+              )
+            ),
+          successRate: Number(
+            successRate.toFixed(2)
+          ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Metrics error:",
+        error
       );
 
-    const averageOrderValue =
-      successfulCount > 0
-        ? totalRevenue / successfulCount
-        : 0;
+      res.status(500).json({
+        success: false,
+        error:
+          "Failed to fetch live metrics",
+      });
+    }
+  }
+);
 
-    const successRate =
-      totalTransactions > 0
-        ? (successfulCount / totalTransactions) * 100
-        : 0;
+// ======================================================
+// AI INSIGHTS
+// PROTECTED ADMIN ENDPOINT
+// ======================================================
 
-    res.json({
-      success: true,
-      metrics: {
+app.get(
+  "/api/ai-insights",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const result =
+        await pool.query(`
+        SELECT
+          id,
+          amount,
+          currency,
+          status,
+          created_at
+        FROM orders
+        ORDER BY created_at DESC
+      `);
+
+      const orders =
+        result.rows;
+
+      const totalTransactions =
+        orders.length;
+
+      const successfulOrders =
+        orders.filter(
+          (order) =>
+            order.status === "paid"
+        );
+
+      const successfulCount =
+        successfulOrders.length;
+
+      const totalRevenue =
+        successfulOrders.reduce(
+          (total, order) =>
+            total +
+            Number(order.amount),
+          0
+        );
+
+      const averageOrderValue =
+        successfulCount > 0
+          ? totalRevenue /
+            successfulCount
+          : 0;
+
+      const successRate =
+        totalTransactions > 0
+          ? (successfulCount /
+              totalTransactions) *
+            100
+          : 0;
+
+      const metrics = {
         totalRevenue: Number(
           totalRevenue.toFixed(2)
         ),
         totalTransactions,
-        averageOrderValue: Number(
-          averageOrderValue.toFixed(2)
-        ),
+        averageOrderValue:
+          Number(
+            averageOrderValue.toFixed(
+              2
+            )
+          ),
         successRate: Number(
           successRate.toFixed(2)
         ),
-      },
-    });
-  } catch (error) {
-    console.error("Metrics error:", error);
+      };
 
-    res.status(500).json({
-      success: false,
-      error: "Failed to fetch live metrics",
-    });
-  }
-});
+      // ------------------------------------------------
+      // CHECK CACHE
+      // ------------------------------------------------
 
-// ======================================================
-// AI INSIGHTS
-// ======================================================
+      const cachedResult =
+        await pool.query(`
+        SELECT
+          insights,
+          total_revenue,
+          total_transactions,
+          average_order_value,
+          success_rate,
+          created_at
+        FROM ai_insights
+        ORDER BY created_at DESC
+        LIMIT 1
+      `);
 
-app.get("/api/ai-insights", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT
-        id,
-        amount,
-        currency,
-        status,
-        created_at
-      FROM orders
-      ORDER BY created_at DESC
-    `);
-
-    const orders = result.rows;
-
-    const totalTransactions = orders.length;
-
-    const successfulOrders = orders.filter(
-      (order) => order.status === "paid"
-    );
-
-    const successfulCount =
-      successfulOrders.length;
-
-    const totalRevenue =
-      successfulOrders.reduce(
-        (total, order) =>
-          total + Number(order.amount),
+      if (
+        cachedResult.rows.length >
         0
-      );
+      ) {
+        const cached =
+          cachedResult.rows[0];
 
-    const averageOrderValue =
-      successfulCount > 0
-        ? totalRevenue / successfulCount
-        : 0;
+        const cacheMatches =
+          Number(
+            cached.total_revenue
+          ) ===
+            metrics.totalRevenue &&
+          Number(
+            cached.total_transactions
+          ) ===
+            metrics.totalTransactions &&
+          Number(
+            cached.average_order_value
+          ) ===
+            metrics.averageOrderValue &&
+          Number(
+            cached.success_rate
+          ) ===
+            metrics.successRate;
 
-    const successRate =
-      totalTransactions > 0
-        ? (successfulCount / totalTransactions) * 100
-        : 0;
+        if (cacheMatches) {
+          return res.json({
+            success: true,
+            metrics,
+            insights:
+              cached.insights,
+            cached: true,
+            cachedAt:
+              cached.created_at,
+          });
+        }
+      }
 
-    const metrics = {
-      totalRevenue: Number(
-        totalRevenue.toFixed(2)
-      ),
-      totalTransactions,
-      averageOrderValue: Number(
-        averageOrderValue.toFixed(2)
-      ),
-      successRate: Number(
-        successRate.toFixed(2)
-      ),
-    };
+      // ------------------------------------------------
+      // NO TRANSACTIONS
+      // ------------------------------------------------
 
-    // --------------------------------------------------
-    // CHECK CACHE
-    // --------------------------------------------------
-
-    const cachedResult = await pool.query(`
-      SELECT
-        insights,
-        total_revenue,
-        total_transactions,
-        average_order_value,
-        success_rate,
-        created_at
-      FROM ai_insights
-      ORDER BY created_at DESC
-      LIMIT 1
-    `);
-
-    if (cachedResult.rows.length > 0) {
-      const cached = cachedResult.rows[0];
-
-      const cacheMatches =
-        Number(cached.total_revenue) ===
-          metrics.totalRevenue &&
-        Number(cached.total_transactions) ===
-          metrics.totalTransactions &&
-        Number(cached.average_order_value) ===
-          metrics.averageOrderValue &&
-        Number(cached.success_rate) ===
-          metrics.successRate;
-
-      if (cacheMatches) {
+      if (orders.length === 0) {
         return res.json({
           success: true,
           metrics,
-          insights: cached.insights,
-          cached: true,
-          cachedAt: cached.created_at,
+          insights:
+            "There are no transactions to analyze yet.",
+          cached: false,
         });
       }
-    }
 
-    // --------------------------------------------------
-    // NO TRANSACTIONS
-    // --------------------------------------------------
+      // ------------------------------------------------
+      // TRANSACTION DATA
+      // ------------------------------------------------
 
-    if (orders.length === 0) {
-      return res.json({
-        success: true,
-        metrics,
-        insights:
-          "There are no transactions to analyze yet.",
-        cached: false,
-      });
-    }
+      const transactionData =
+        orders.map((order) => ({
+          id: order.id,
+          amount: Number(
+            order.amount
+          ),
+          currency:
+            order.currency,
+          status:
+            order.status,
+          created_at:
+            order.created_at,
+        }));
 
-    // --------------------------------------------------
-    // TRANSACTION DATA
-    // --------------------------------------------------
+      // ------------------------------------------------
+      // GEMINI PROMPT
+      // ------------------------------------------------
 
-    const transactionData = orders.map(
-      (order) => ({
-        id: order.id,
-        amount: Number(order.amount),
-        currency: order.currency,
-        status: order.status,
-        created_at: order.created_at,
-      })
-    );
-
-    // --------------------------------------------------
-    // GEMINI PROMPT
-    // --------------------------------------------------
-
-    const prompt = `
+      const prompt = `
 You are the AI Finance Controller for IntentCart.
 
 Analyze the following real transaction data from PostgreSQL.
@@ -789,144 +933,153 @@ Keep the language professional and easy to understand.
 Do not invent transaction data.
 `;
 
-    // --------------------------------------------------
-    // GEMINI REQUEST
-    // --------------------------------------------------
+      // ------------------------------------------------
+      // GEMINI REQUEST
+      // ------------------------------------------------
 
-    let response;
+      let response;
 
-    try {
-      response =
-        await ai.models.generateContent({
-          model: "gemini-3.6-flash",
-          contents: prompt,
-        });
-    } catch (geminiError) {
-      console.error(
-        "Gemini AI error:",
-        geminiError
-      );
-
-      const errorText =
-        geminiError?.message ||
-        String(geminiError);
-
-      const isQuotaError =
-        errorText.includes("429") ||
-        errorText.includes(
-          "RESOURCE_EXHAUSTED"
-        ) ||
-        errorText
-          .toLowerCase()
-          .includes("quota");
-
-      const isTemporaryError =
-        errorText.includes("503") ||
-        errorText.includes(
-          "UNAVAILABLE"
+      try {
+        response =
+          await ai.models.generateContent(
+            {
+              model:
+                "gemini-3.6-flash",
+              contents: prompt,
+            }
+          );
+      } catch (geminiError) {
+        console.error(
+          "Gemini AI error:",
+          geminiError
         );
 
-      if (cachedResult.rows.length > 0) {
-        const cached =
-          cachedResult.rows[0];
+        const errorText =
+          geminiError?.message ||
+          String(geminiError);
 
-        return res.json({
-          success: true,
-          metrics,
-          insights: cached.insights,
-          cached: true,
-          cachedAt: cached.created_at,
-          warning: isQuotaError
-            ? "Gemini free-tier quota reached. Showing the last saved analysis."
-            : isTemporaryError
-            ? "Gemini is temporarily unavailable. Showing the last saved analysis."
-            : "Showing the last saved analysis.",
-        });
+        const isQuotaError =
+          errorText.includes("429") ||
+          errorText.includes(
+            "RESOURCE_EXHAUSTED"
+          ) ||
+          errorText
+            .toLowerCase()
+            .includes("quota");
+
+        const isTemporaryError =
+          errorText.includes("503") ||
+          errorText.includes(
+            "UNAVAILABLE"
+          );
+
+        if (
+          cachedResult.rows.length >
+          0
+        ) {
+          const cached =
+            cachedResult.rows[0];
+
+          return res.json({
+            success: true,
+            metrics,
+            insights:
+              cached.insights,
+            cached: true,
+            cachedAt:
+              cached.created_at,
+            warning: isQuotaError
+              ? "Gemini free-tier quota reached. Showing the last saved analysis."
+              : isTemporaryError
+              ? "Gemini is temporarily unavailable. Showing the last saved analysis."
+              : "Showing the last saved analysis.",
+          });
+        }
+
+        if (isQuotaError) {
+          return res.status(200).json({
+            success: true,
+            metrics,
+            insights:
+              "Gemini AI has reached its current free-tier quota. Your transaction data is available, but a new AI analysis cannot be generated right now. Please try again later.",
+            cached: false,
+            quotaExceeded: true,
+          });
+        }
+
+        if (isTemporaryError) {
+          return res.status(200).json({
+            success: true,
+            metrics,
+            insights:
+              "Gemini AI is temporarily experiencing high demand. Please try again later.",
+            cached: false,
+            temporaryError: true,
+          });
+        }
+
+        throw geminiError;
       }
 
-      if (isQuotaError) {
-        return res.status(200).json({
-          success: true,
-          metrics,
-          insights:
-            "Gemini AI has reached its current free-tier quota. Your transaction data is available, but a new AI analysis cannot be generated right now. Please try again later.",
-          cached: false,
-          quotaExceeded: true,
-        });
-      }
+      // ------------------------------------------------
+      // AI TEXT
+      // ------------------------------------------------
 
-      if (isTemporaryError) {
-        return res.status(200).json({
-          success: true,
-          metrics,
-          insights:
-            "Gemini AI is temporarily experiencing high demand. Please try again later.",
-          cached: false,
-          temporaryError: true,
-        });
-      }
+      const insights =
+        response.text ||
+        "No AI insights generated.";
 
-      throw geminiError;
+      // ------------------------------------------------
+      // SAVE AI INSIGHTS
+      // ------------------------------------------------
+
+      await pool.query(
+        `
+        INSERT INTO ai_insights
+        (
+          insights,
+          total_revenue,
+          total_transactions,
+          average_order_value,
+          success_rate
+        )
+        VALUES ($1, $2, $3, $4, $5)
+        `,
+        [
+          insights,
+          metrics.totalRevenue,
+          metrics.totalTransactions,
+          metrics.averageOrderValue,
+          metrics.successRate,
+        ]
+      );
+
+      // ------------------------------------------------
+      // RESPONSE
+      // ------------------------------------------------
+
+      res.json({
+        success: true,
+        metrics,
+        insights,
+        cached: false,
+        savedToDatabase: true,
+      });
+    } catch (error) {
+      console.error(
+        "AI insights error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        error:
+          error.message ||
+          "Failed to generate AI insights",
+      });
     }
-
-    // --------------------------------------------------
-    // AI TEXT
-    // --------------------------------------------------
-
-    const insights =
-      response.text ||
-      "No AI insights generated.";
-
-    // --------------------------------------------------
-    // SAVE AI INSIGHTS
-    // --------------------------------------------------
-
-    await pool.query(
-      `
-      INSERT INTO ai_insights
-      (
-        insights,
-        total_revenue,
-        total_transactions,
-        average_order_value,
-        success_rate
-      )
-      VALUES ($1, $2, $3, $4, $5)
-      `,
-      [
-        insights,
-        metrics.totalRevenue,
-        metrics.totalTransactions,
-        metrics.averageOrderValue,
-        metrics.successRate,
-      ]
-    );
-
-    // --------------------------------------------------
-    // RESPONSE
-    // --------------------------------------------------
-
-    res.json({
-      success: true,
-      metrics,
-      insights,
-      cached: false,
-      savedToDatabase: true,
-    });
-  } catch (error) {
-    console.error(
-      "AI insights error:",
-      error
-    );
-
-    res.status(500).json({
-      success: false,
-      error:
-        error.message ||
-        "Failed to generate AI insights",
-    });
   }
-});
+);
 
 // ======================================================
 // START SERVER
@@ -939,11 +1092,15 @@ async function startServer() {
   try {
     await createTables();
 
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(
-        `IntentCart backend running on port ${PORT}`
-      );
-    });
+    app.listen(
+      PORT,
+      "0.0.0.0",
+      () => {
+        console.log(
+          `IntentCart backend running on port ${PORT}`
+        );
+      }
+    );
   } catch (error) {
     console.error(
       "Failed to start server:",
