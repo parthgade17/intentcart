@@ -37,7 +37,7 @@ export default function AdminLoginPage() {
     // Give the browser a moment to store the cookie,
     // then navigate to the protected dashboard.
     setTimeout(() => {
-      window.location.href = "/admin/dashboard";
+     window.location.href = "/control-center/dashboard";
     }, 100);
   };
 
