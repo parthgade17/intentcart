@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
@@ -12,6 +13,10 @@ type Product = {
   reviews: number;
   emoji: string;
   description: string;
+};
+
+type CartItem = Product & {
+  quantity: number;
 };
 
 const products: Product[] = [
@@ -111,14 +116,17 @@ export default function ProductDetailsPage() {
 
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const [buying, setBuying] = useState(false);
 
   const product = useMemo(() => {
     const id = Number(params.id);
 
-    return products.find(
-      (item) => item.id === id
-    );
+    return products.find((item) => item.id === id);
   }, [params.id]);
+
+  // ==========================================
+  // PRODUCT NOT FOUND
+  // ==========================================
 
   if (!product) {
     return (
@@ -135,9 +143,7 @@ export default function ProductDetailsPage() {
           </p>
 
           <button
-            onClick={() =>
-              router.push("/products")
-            }
+            onClick={() => router.push("/products")}
             className="mt-6 rounded-xl bg-cyan-500 px-5 py-3 text-sm font-bold text-slate-950 hover:bg-cyan-400"
           >
             ← Back to Products
@@ -147,48 +153,72 @@ export default function ProductDetailsPage() {
     );
   }
 
-  const addToCart = () => {
-    const existingCart = JSON.parse(
-      localStorage.getItem(
-        "intentcart_cart"
-      ) || "[]"
-    );
+  // ==========================================
+  // ADD PRODUCT TO CART
+  // ==========================================
 
-    const existingProduct =
-      existingCart.find(
-        (item: Product & { quantity: number }) =>
-          item.id === product.id
+  const addProductToCart = () => {
+    try {
+      const savedCart = localStorage.getItem(
+        "intentcart_cart"
       );
 
-    let updatedCart;
+      const existingCart: CartItem[] = savedCart
+        ? JSON.parse(savedCart)
+        : [];
 
-    if (existingProduct) {
-      updatedCart = existingCart.map(
-        (item: Product & {
-          quantity: number;
-        }) =>
+      const existingProduct = existingCart.find(
+        (item) => item.id === product.id
+      );
+
+      let updatedCart: CartItem[];
+
+      if (existingProduct) {
+        updatedCart = existingCart.map((item) =>
           item.id === product.id
             ? {
                 ...item,
                 quantity:
-                  item.quantity + quantity,
+                  Number(item.quantity) + quantity,
               }
             : item
-      );
-    } else {
-      updatedCart = [
-        ...existingCart,
-        {
-          ...product,
-          quantity,
-        },
-      ];
-    }
+        );
+      } else {
+        updatedCart = [
+          ...existingCart,
+          {
+            ...product,
+            quantity,
+          },
+        ];
+      }
 
-    localStorage.setItem(
-      "intentcart_cart",
-      JSON.stringify(updatedCart)
-    );
+      localStorage.setItem(
+        "intentcart_cart",
+        JSON.stringify(updatedCart)
+      );
+
+      return true;
+    } catch (error) {
+      console.error(
+        "Add to cart error:",
+        error
+      );
+
+      return false;
+    }
+  };
+
+  // ==========================================
+  // ADD TO CART
+  // ==========================================
+
+  const handleAddToCart = () => {
+    const success = addProductToCart();
+
+    if (!success) {
+      return;
+    }
 
     setAdded(true);
 
@@ -197,65 +227,44 @@ export default function ProductDetailsPage() {
     }, 2500);
   };
 
-  const buyNow = () => {
-    const existingCart = JSON.parse(
-      localStorage.getItem(
-        "intentcart_cart"
-      ) || "[]"
-    );
+  // ==========================================
+  // BUY NOW
+  // ==========================================
 
-    const existingProduct =
-      existingCart.find(
-        (item: Product & { quantity: number }) =>
-          item.id === product.id
-      );
+  const handleBuyNow = () => {
+    if (buying) return;
 
-    let updatedCart;
+    setBuying(true);
 
-    if (existingProduct) {
-      updatedCart = existingCart.map(
-        (item: Product & {
-          quantity: number;
-        }) =>
-          item.id === product.id
-            ? {
-                ...item,
-                quantity:
-                  item.quantity + quantity,
-              }
-            : item
-      );
-    } else {
-      updatedCart = [
-        ...existingCart,
-        {
-          ...product,
-          quantity,
-        },
-      ];
+    const success = addProductToCart();
+
+    if (!success) {
+      setBuying(false);
+      return;
     }
 
-    localStorage.setItem(
-      "intentcart_cart",
-      JSON.stringify(updatedCart)
-    );
-
+    // Go directly to cart
+    // Cart page will handle Razorpay checkout.
     router.push("/cart");
   };
+
+  // ==========================================
+  // PAGE
+  // ==========================================
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
 
-      {/* NAVBAR */}
+      {/* ==========================================
+          NAVBAR
+      ========================================== */}
 
       <nav className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
 
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
 
           <button
-            onClick={() =>
-              router.push("/products")
-            }
+            onClick={() => router.push("/products")}
             className="flex items-center gap-3"
           >
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500 text-lg font-black text-slate-950">
@@ -274,9 +283,7 @@ export default function ProductDetailsPage() {
           </button>
 
           <button
-            onClick={() =>
-              router.push("/cart")
-            }
+            onClick={() => router.push("/cart")}
             className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold transition hover:border-cyan-500/50 hover:bg-slate-800"
           >
             🛒
@@ -287,16 +294,16 @@ export default function ProductDetailsPage() {
 
       </nav>
 
-      {/* PRODUCT */}
+      {/* ==========================================
+          PRODUCT SECTION
+      ========================================== */}
 
       <section className="mx-auto max-w-7xl px-5 py-10 sm:py-16">
 
-        {/* BACK */}
+        {/* BACK BUTTON */}
 
         <button
-          onClick={() =>
-            router.push("/products")
-          }
+          onClick={() => router.push("/products")}
           className="mb-8 text-sm font-medium text-slate-500 transition hover:text-cyan-400"
         >
           ← Back to Products
@@ -304,7 +311,9 @@ export default function ProductDetailsPage() {
 
         <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
 
-          {/* PRODUCT IMAGE */}
+          {/* ========================================
+              PRODUCT IMAGE
+          ======================================== */}
 
           <div className="overflow-hidden rounded-3xl border border-slate-800 bg-slate-900">
 
@@ -314,9 +323,13 @@ export default function ProductDetailsPage() {
 
           </div>
 
-          {/* PRODUCT INFORMATION */}
+          {/* ========================================
+              PRODUCT INFORMATION
+          ======================================== */}
 
           <div>
+
+            {/* CATEGORY + REVIEWS */}
 
             <div className="mb-4 flex flex-wrap items-center gap-3">
 
@@ -331,15 +344,21 @@ export default function ProductDetailsPage() {
 
             </div>
 
+            {/* NAME */}
+
             <h1 className="text-4xl font-black tracking-tight sm:text-5xl">
               {product.name}
             </h1>
+
+            {/* DESCRIPTION */}
 
             <p className="mt-6 text-base leading-8 text-slate-400">
               {product.description}
             </p>
 
-            {/* PRICE */}
+            {/* ========================================
+                PRICE
+            ======================================== */}
 
             <div className="mt-8 rounded-2xl border border-slate-800 bg-slate-900 p-5">
 
@@ -364,7 +383,9 @@ export default function ProductDetailsPage() {
 
             </div>
 
-            {/* QUANTITY */}
+            {/* ========================================
+                QUANTITY
+            ======================================== */}
 
             <div className="mt-6">
 
@@ -383,7 +404,8 @@ export default function ProductDetailsPage() {
                       )
                     )
                   }
-                  className="flex h-11 w-11 items-center justify-center text-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                  disabled={buying}
+                  className="flex h-11 w-11 items-center justify-center text-lg text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
                 >
                   −
                 </button>
@@ -398,7 +420,8 @@ export default function ProductDetailsPage() {
                       quantity + 1
                     )
                   }
-                  className="flex h-11 w-11 items-center justify-center text-lg text-slate-400 transition hover:bg-slate-800 hover:text-white"
+                  disabled={buying}
+                  className="flex h-11 w-11 items-center justify-center text-lg text-slate-400 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
                 >
                   +
                 </button>
@@ -407,7 +430,9 @@ export default function ProductDetailsPage() {
 
             </div>
 
-            {/* TOTAL */}
+            {/* ========================================
+                TOTAL
+            ======================================== */}
 
             <div className="mt-6 flex items-center justify-between border-t border-slate-800 pt-5">
 
@@ -418,8 +443,7 @@ export default function ProductDetailsPage() {
               <span className="text-2xl font-black">
                 ₹
                 {(
-                  product.price *
-                  quantity
+                  product.price * quantity
                 ).toLocaleString(
                   "en-IN"
                 )}
@@ -427,33 +451,45 @@ export default function ProductDetailsPage() {
 
             </div>
 
-            {/* BUTTONS */}
+            {/* ========================================
+                ACTION BUTTONS
+            ======================================== */}
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
 
+              {/* ADD TO CART */}
+
               <button
-                onClick={addToCart}
+                onClick={handleAddToCart}
+                disabled={buying}
                 className={`rounded-xl border px-5 py-4 text-sm font-bold transition ${
                   added
                     ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
                     : "border-slate-700 bg-slate-900 text-white hover:border-cyan-500/50 hover:bg-slate-800"
-                }`}
+                } disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 {added
                   ? "✓ Added to Cart"
                   : "🛒 Add to Cart"}
               </button>
 
+              {/* BUY NOW */}
+
               <button
-                onClick={buyNow}
-                className="rounded-xl bg-cyan-500 px-5 py-4 text-sm font-bold text-slate-950 transition hover:bg-cyan-400"
+                onClick={handleBuyNow}
+                disabled={buying}
+                className="rounded-xl bg-cyan-500 px-5 py-4 text-sm font-bold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                ⚡ Buy Now
+                {buying
+                  ? "Opening Cart..."
+                  : "⚡ Buy Now"}
               </button>
 
             </div>
 
-            {/* FEATURES */}
+            {/* ========================================
+                FEATURES
+            ======================================== */}
 
             <div className="mt-8 grid gap-3 sm:grid-cols-3">
 
@@ -480,7 +516,9 @@ export default function ProductDetailsPage() {
 
       </section>
 
-      {/* FOOTER */}
+      {/* ==========================================
+          FOOTER
+      ========================================== */}
 
       <footer className="border-t border-slate-800">
 
@@ -501,6 +539,10 @@ export default function ProductDetailsPage() {
     </main>
   );
 }
+
+// ==========================================
+// FEATURE COMPONENT
+// ==========================================
 
 function Feature({
   icon,
