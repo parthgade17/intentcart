@@ -49,7 +49,7 @@ export default function OrderDetailsPage({
         console.log("ORDER ID:", id);
 
         const response = await fetch(
-          `http://https://intentcart-pixx.onrender.com/api/orders/${id}`,
+         `https://intentcart-pixx.onrender.com/api/orders/${id}`,
           {
             cache: "no-store",
           }
