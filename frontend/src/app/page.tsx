@@ -1,1095 +1,420 @@
+
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
-
-type CartItem = {
-  id: number;
-  name: string;
-  category: string;
-  price: number;
-  rating: number;
-  reviews: number;
-  emoji: string;
-  description: string;
-  quantity: number;
-};
-
-type RazorpayResponse = {
-  razorpay_order_id: string;
-  razorpay_payment_id: string;
-  razorpay_signature: string;
-};
-
-export default function CartPage() {
+export default function HomePage() {
   const router = useRouter();
-
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-
-  // ==========================================
-  // LOAD CART
-  // ==========================================
-
-  useEffect(() => {
-    try {
-      const savedCart =
-        localStorage.getItem("intentcart_cart");
-
-      if (savedCart) {
-        const parsedCart = JSON.parse(savedCart);
-
-        if (Array.isArray(parsedCart)) {
-          setCart(parsedCart);
-        } else {
-          setCart([]);
-        }
-      }
-    } catch (error) {
-      console.error("Cart loading error:", error);
-      setCart([]);
-    }
-
-    setLoaded(true);
-  }, []);
-
-  // ==========================================
-  // UPDATE CART
-  // ==========================================
-
-  const updateCart = (
-    productId: number,
-    quantity: number
-  ) => {
-    if (quantity <= 0) {
-      removeItem(productId);
-      return;
-    }
-
-    const updatedCart = cart.map((item) =>
-      item.id === productId
-        ? {
-            ...item,
-            quantity,
-          }
-        : item
-    );
-
-    setCart(updatedCart);
-
-    localStorage.setItem(
-      "intentcart_cart",
-      JSON.stringify(updatedCart)
-    );
-  };
-
-  // ==========================================
-  // REMOVE ITEM
-  // ==========================================
-
-  const removeItem = (productId: number) => {
-    const updatedCart = cart.filter(
-      (item) => item.id !== productId
-    );
-
-    setCart(updatedCart);
-
-    localStorage.setItem(
-      "intentcart_cart",
-      JSON.stringify(updatedCart)
-    );
-  };
-
-  // ==========================================
-  // CLEAR CART
-  // ==========================================
-
-  const clearCart = () => {
-    if (loading) {
-      return;
-    }
-
-    setCart([]);
-
-    localStorage.removeItem("intentcart_cart");
-  };
-
-  // ==========================================
-  // TOTAL ITEMS
-  // ==========================================
-
-  const totalItems = useMemo(() => {
-    return cart.reduce(
-      (total, item) =>
-        total + item.quantity,
-      0
-    );
-  }, [cart]);
-
-  // ==========================================
-  // SUBTOTAL
-  // ==========================================
-
-  const subtotal = useMemo(() => {
-    return cart.reduce(
-      (total, item) =>
-        total +
-        Number(item.price) *
-          item.quantity,
-      0
-    );
-  }, [cart]);
-
-  // ==========================================
-  // DELIVERY
-  // ==========================================
-
-  const delivery =
-    subtotal >= 1000
-      ? 0
-      : 49;
-
-  // ==========================================
-  // TOTAL
-  // ==========================================
-
-  const total =
-    subtotal + delivery;
-
-  // ==========================================
-  // LOAD RAZORPAY
-  // ==========================================
-
-  const loadRazorpay = () => {
-    return new Promise<boolean>(
-      (resolve) => {
-        if (
-          typeof window ===
-          "undefined"
-        ) {
-          resolve(false);
-          return;
-        }
-
-        if (window.Razorpay) {
-          resolve(true);
-          return;
-        }
-
-        const existingScript =
-          document.querySelector(
-            'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
-          );
-
-        if (existingScript) {
-          existingScript.addEventListener(
-            "load",
-            () => resolve(true)
-          );
-
-          existingScript.addEventListener(
-            "error",
-            () => resolve(false)
-          );
-
-          return;
-        }
-
-        const script =
-          document.createElement(
-            "script"
-          );
-
-        script.src =
-          "https://checkout.razorpay.com/v1/checkout.js";
-
-        script.async = true;
-
-        script.onload = () =>
-          resolve(true);
-
-        script.onerror = () =>
-          resolve(false);
-
-        document.body.appendChild(
-          script
-        );
-      }
-    );
-  };
-
-  // ==========================================
-  // CHECKOUT
-  // ==========================================
-
-  const handleCheckout =
-    async () => {
-      if (cart.length === 0) {
-        setMessage(
-          "Your cart is empty."
-        );
-        return;
-      }
-
-      if (loading) {
-        return;
-      }
-
-      setLoading(true);
-      setMessage("");
-
-      try {
-        // ======================================
-        // RAZORPAY KEY
-        // ======================================
-
-        const razorpayKey =
-          process.env
-            .NEXT_PUBLIC_RAZORPAY_KEY_ID;
-
-        if (!razorpayKey) {
-          throw new Error(
-            "Razorpay key is missing. Check NEXT_PUBLIC_RAZORPAY_KEY_ID in frontend/.env.local."
-          );
-        }
-
-        // ======================================
-        // LOAD RAZORPAY
-        // ======================================
-
-        setMessage(
-          "Loading secure payment..."
-        );
-
-        const razorpayLoaded =
-          await loadRazorpay();
-
-        if (!razorpayLoaded) {
-          throw new Error(
-            "Failed to load Razorpay. Please check your internet connection."
-          );
-        }
-
-        // ======================================
-        // PREPARE ITEMS
-        // ======================================
-
-        const orderItems =
-          cart.map((item) => ({
-            id: Number(item.id),
-            name: String(item.name),
-            category: item.category
-              ? String(item.category)
-              : "",
-            price: Number(item.price),
-            quantity: Number(
-              item.quantity
-            ),
-            emoji: item.emoji
-              ? String(item.emoji)
-              : "",
-          }));
-
-        // ======================================
-        // CREATE BACKEND ORDER
-        // ======================================
-
-        setMessage(
-          "Creating your order..."
-        );
-
-        const orderResponse =
-          await fetch(
-            "http://https://intentcart-pixx.onrender.com",
-            {
-              method: "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-
-              body: JSON.stringify({
-                amount: total,
-                items: orderItems,
-              }),
-            }
-          );
-
-        let orderData: any;
-
-        try {
-          orderData =
-            await orderResponse.json();
-        } catch {
-          throw new Error(
-            "Backend returned an invalid response."
-          );
-        }
-
-        if (
-          !orderResponse.ok ||
-          !orderData.success ||
-          !orderData.order
-        ) {
-          throw new Error(
-            orderData?.error ||
-              "Failed to create Razorpay order."
-          );
-        }
-
-        console.log(
-          "Backend order created:",
-          orderData
-        );
-
-        // ======================================
-        // RAZORPAY OPTIONS
-        // ======================================
-
-        const options = {
-          key: razorpayKey,
-
-          amount:
-            orderData.order.amount,
-
-          currency:
-            orderData.order.currency ||
-            "INR",
-
-          name: "IntentCart",
-
-          description:
-            "IntentCart Shopping Order",
-
-          order_id:
-            orderData.order
-              .razorpay_order_id,
-
-          theme: {
-            color: "#06b6d4",
-          },
-
-          // ====================================
-          // PAYMENT SUCCESS
-          // ====================================
-
-          handler:
-            async function (
-              response: RazorpayResponse
-            ) {
-              try {
-                setMessage(
-                  "Payment successful. Verifying payment..."
-                );
-
-                console.log(
-                  "Razorpay payment response:",
-                  response
-                );
-
-                // =================================
-                // VERIFY PAYMENT
-                // =================================
-
-                const verifyResponse =
-                  await fetch(
-                    "http://https://intentcart-pixx.onrender.com/api/verify-payment",
-                    {
-                      method: "POST",
-
-                      headers: {
-                        "Content-Type":
-                          "application/json",
-                      },
-
-                      body: JSON.stringify({
-                        razorpay_order_id:
-                          response.razorpay_order_id,
-
-                        razorpay_payment_id:
-                          response.razorpay_payment_id,
-
-                        razorpay_signature:
-                          response.razorpay_signature,
-                      }),
-                    }
-                  );
-
-                let verifyData: any;
-
-                try {
-                  verifyData =
-                    await verifyResponse.json();
-                } catch {
-                  throw new Error(
-                    "Invalid response from payment verification server."
-                  );
-                }
-
-                console.log(
-                  "Payment verification response:",
-                  verifyData
-                );
-
-                if (
-                  !verifyResponse.ok ||
-                  !verifyData.success ||
-                  !verifyData.order
-                ) {
-                  throw new Error(
-                    verifyData?.error ||
-                      "Payment verification failed."
-                  );
-                }
-
-                // =================================
-                // DATABASE ITEMS
-                // =================================
-
-                const purchasedItems =
-                  Array.isArray(
-                    verifyData.items
-                  )
-                    ? verifyData.items
-                    : orderItems;
-
-                // =================================
-                // SAVE PAYMENT DETAILS
-                // =================================
-
-                const paymentDetails = {
-                  databaseOrderId:
-                    Number(
-                      verifyData.order.id
-                    ),
-
-                  razorpayOrderId:
-                    response.razorpay_order_id,
-
-                  razorpayPaymentId:
-                    response.razorpay_payment_id,
-
-                  amount:
-                    Number(
-                      verifyData.order.amount
-                    ),
-
-                  currency:
-                    verifyData.order.currency ||
-                    "INR",
-
-                  status:
-                    verifyData.order.status ||
-                    "paid",
-
-                  items:
-                    purchasedItems,
-
-                  paidAt:
-                    new Date().toISOString(),
-                };
-
-                localStorage.setItem(
-                  "intentcart_last_payment",
-                  JSON.stringify(
-                    paymentDetails
-                  )
-                );
-
-                console.log(
-                  "Payment details saved:",
-                  paymentDetails
-                );
-
-                // =================================
-                // CLEAR CART
-                // =================================
-
-                localStorage.removeItem(
-                  "intentcart_cart"
-                );
-
-                setCart([]);
-
-                // =================================
-                // SUCCESS MESSAGE
-                // =================================
-
-                setMessage(
-                  "Payment successful! Your order has been confirmed."
-                );
-
-                // =================================
-                // REDIRECT
-                // =================================
-
-                setTimeout(() => {
-                  router.push(
-                    "/payment-success"
-                  );
-                }, 700);
-
-              } catch (error) {
-                console.error(
-                  "Payment verification error:",
-                  error
-                );
-
-                setLoading(false);
-
-                setMessage(
-                  error instanceof
-                    Error
-                    ? error.message
-                    : "Payment verification failed."
-                );
-              }
-            },
-
-          // ======================================
-          // MODAL DISMISS
-          // ======================================
-
-          modal: {
-            ondismiss: () => {
-              setLoading(false);
-
-              setMessage(
-                "Payment cancelled."
-              );
-            },
-          },
-        };
-
-        // ======================================
-        // OPEN RAZORPAY
-        // ======================================
-
-        const razorpay =
-          new window.Razorpay(
-            options
-          );
-
-        // ======================================
-        // PAYMENT FAILED
-        // ======================================
-
-        razorpay.on(
-          "payment.failed",
-          (response: any) => {
-            console.error(
-              "Razorpay payment failed:",
-              response
-            );
-
-            setLoading(false);
-
-            setMessage(
-              response?.error
-                ?.description ||
-                "Payment failed. Please try again."
-            );
-          }
-        );
-
-        // ======================================
-        // OPEN CHECKOUT
-        // ======================================
-
-        razorpay.open();
-
-      } catch (error) {
-        console.error(
-          "Checkout error:",
-          error
-        );
-
-        setLoading(false);
-
-        setMessage(
-          error instanceof Error
-            ? error.message
-            : "Something went wrong during checkout."
-        );
-      }
-    };
-
-  // ==========================================
-  // LOADING
-  // ==========================================
-
-  if (!loaded) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
-        <div className="text-sm text-slate-500">
-          Loading cart...
-        </div>
-      </main>
-    );
-  }
-
-  // ==========================================
-  // PAGE
-  // ==========================================
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
 
-      {/* NAVBAR */}
+      {/* ======================================================
+          NAVBAR
+      ====================================================== */}
 
-      <nav className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/95 backdrop-blur">
+      <nav className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950/90 backdrop-blur-xl">
 
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
 
+          {/* LOGO */}
+
           <button
-            onClick={() =>
-              router.push(
-                "/products"
-              )
-            }
+            onClick={() => router.push("/")}
             className="flex items-center gap-3"
           >
 
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500 text-lg font-black text-slate-950">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-400 text-xl font-black text-slate-950 shadow-lg shadow-cyan-500/20">
               I
             </div>
 
             <div className="text-left">
-
-              <h1 className="text-lg font-bold">
+              <p className="text-lg font-black tracking-tight">
                 IntentCart
-              </h1>
-
-              <p className="text-[10px] uppercase tracking-widest text-slate-500">
-                Smart Commerce
               </p>
 
+              <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                Smart Commerce
+              </p>
             </div>
 
           </button>
 
+          {/* NAVIGATION */}
+
+          <div className="hidden items-center gap-8 md:flex">
+
+            <button
+              onClick={() => router.push("/")}
+              className="text-sm font-semibold text-white"
+            >
+              Home
+            </button>
+
+            <button
+              onClick={() => router.push("/products")}
+              className="text-sm font-semibold text-slate-400 transition hover:text-cyan-400"
+            >
+              Products
+            </button>
+
+            <button
+              onClick={() => router.push("/cart")}
+              className="text-sm font-semibold text-slate-400 transition hover:text-cyan-400"
+            >
+              Cart
+            </button>
+
+          </div>
+
+          {/* CART BUTTON */}
+
           <button
-            onClick={() =>
-              router.push(
-                "/products"
-              )
-            }
-            className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-semibold transition hover:border-cyan-500/50 hover:bg-slate-800"
+            onClick={() => router.push("/cart")}
+            className="rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-sm font-bold transition hover:border-cyan-500/50 hover:bg-slate-800"
           >
-            🛍️ Continue Shopping
+            🛒 Cart
           </button>
 
         </div>
 
       </nav>
 
-      {/* PAGE */}
+      {/* ======================================================
+          HERO SECTION
+      ====================================================== */}
 
-      <section className="mx-auto max-w-7xl px-5 py-10 sm:py-14">
+      <section className="relative overflow-hidden">
 
-        <div className="mb-10">
+        {/* Background glow */}
 
-          <p className="text-xs font-bold uppercase tracking-widest text-cyan-400">
-            Your Shopping Cart
-          </p>
+        <div className="pointer-events-none absolute left-1/2 top-0 h-[500px] w-[700px] -translate-x-1/2 rounded-full bg-cyan-500/10 blur-3xl" />
 
-          <h1 className="mt-2 text-4xl font-black tracking-tight">
-            Cart
-          </h1>
+        <div className="relative mx-auto grid max-w-7xl gap-12 px-5 py-20 md:grid-cols-2 md:items-center md:py-28">
 
-          <p className="mt-2 text-sm text-slate-500">
-            {totalItems} item
-            {totalItems !== 1
-              ? "s"
-              : ""}{" "}
-            in your cart
-          </p>
+          {/* HERO CONTENT */}
+
+          <div>
+
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-xs font-bold text-cyan-400">
+              ✨ AI-Powered Shopping
+            </div>
+
+            <h1 className="max-w-3xl text-5xl font-black leading-tight tracking-tight sm:text-6xl">
+
+              Shopping that
+
+              <span className="block text-cyan-400">
+                understands you.
+              </span>
+
+            </h1>
+
+            <p className="mt-6 max-w-xl text-base leading-7 text-slate-400 sm:text-lg">
+              Discover products, manage your cart, and complete
+              secure payments through a smarter shopping experience
+              powered by IntentCart.
+            </p>
+
+            {/* HERO BUTTONS */}
+
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+
+              <button
+                onClick={() => router.push("/products")}
+                className="rounded-xl bg-cyan-400 px-7 py-4 text-sm font-black text-slate-950 shadow-lg shadow-cyan-500/10 transition hover:bg-cyan-300"
+              >
+                🛍️ Explore Products
+              </button>
+
+              <button
+                onClick={() => router.push("/cart")}
+                className="rounded-xl border border-slate-700 bg-slate-900 px-7 py-4 text-sm font-bold text-slate-200 transition hover:border-cyan-500/40 hover:bg-slate-800"
+              >
+                View Cart →
+              </button>
+
+            </div>
+
+            {/* TRUST */}
+
+            <div className="mt-10 flex flex-wrap gap-6 text-xs text-slate-500">
+
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-400">✓</span>
+                Secure Payments
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-400">✓</span>
+                Smart Shopping
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-emerald-400">✓</span>
+                Fast Checkout
+              </div>
+
+            </div>
+
+          </div>
+
+          {/* HERO VISUAL */}
+
+          <div className="relative">
+
+            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-2xl shadow-cyan-950/20">
+
+              {/* MOCK STORE HEADER */}
+
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-5">
+
+                <div className="flex items-center justify-between">
+
+                  <div>
+                    <p className="text-xs text-slate-500">
+                      Welcome back
+                    </p>
+
+                    <p className="mt-1 font-bold">
+                      Smart Shopping
+                    </p>
+                  </div>
+
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-lg">
+                    ✦
+                  </div>
+
+                </div>
+
+                {/* PRODUCT CARDS */}
+
+                <div className="mt-6 grid grid-cols-2 gap-3">
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+
+                    <div className="flex h-24 items-center justify-center rounded-xl bg-slate-800 text-5xl">
+                      🎧
+                    </div>
+
+                    <p className="mt-3 text-sm font-bold">
+                      Wireless Audio
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-500">
+                      ₹2,499
+                    </p>
+
+                  </div>
+
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+
+                    <div className="flex h-24 items-center justify-center rounded-xl bg-slate-800 text-5xl">
+                      ⌚
+                    </div>
+
+                    <p className="mt-3 text-sm font-bold">
+                      Smart Watch
+                    </p>
+
+                    <p className="mt-1 text-xs text-slate-500">
+                      ₹3,499
+                    </p>
+
+                  </div>
+
+                </div>
+
+                {/* AI RECOMMENDATION */}
+
+                <div className="mt-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-4">
+
+                  <div className="flex items-start gap-3">
+
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400">
+                      ✦
+                    </div>
+
+                    <div>
+
+                      <p className="text-xs font-bold text-cyan-400">
+                        IntentCart AI
+                      </p>
+
+                      <p className="mt-1 text-xs leading-5 text-slate-400">
+                        Based on your shopping intent, these
+                        products may be a great match.
+                      </p>
+
+                    </div>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
 
         </div>
 
-        {/* MESSAGE */}
+      </section>
 
-        {message && (
-          <div className="mb-6 rounded-xl border border-cyan-500/20 bg-cyan-500/10 p-4 text-sm text-cyan-400">
-            {message}
-          </div>
-        )}
+      {/* ======================================================
+          FEATURES
+      ====================================================== */}
 
-        {/* EMPTY CART */}
+      <section className="border-y border-slate-800 bg-slate-900/30">
 
-        {cart.length === 0 ? (
+        <div className="mx-auto max-w-7xl px-5 py-16">
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 px-6 py-20 text-center">
+          <div className="max-w-2xl">
 
-            <div className="text-7xl">
-              🛒
-            </div>
-
-            <h2 className="mt-6 text-2xl font-bold">
-              Your cart is empty
-            </h2>
-
-            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">
-              Looks like you haven't added
-              anything to your cart yet.
-              Discover something you'll love.
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
+              Why IntentCart
             </p>
 
+            <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
+              A smarter way to shop.
+            </h2>
+
+            <p className="mt-4 text-sm leading-6 text-slate-500">
+              IntentCart combines a clean shopping experience with
+              intelligent features to make discovering and purchasing
+              products easier.
+            </p>
+
+          </div>
+
+          <div className="mt-10 grid gap-5 md:grid-cols-3">
+
+            {/* FEATURE 1 */}
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 transition hover:-translate-y-1 hover:border-cyan-500/30">
+
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-500/10 text-2xl">
+                🤖
+              </div>
+
+              <h3 className="mt-5 text-lg font-bold">
+                AI-Powered Insights
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Intelligent insights help understand shopping
+                activity and purchasing patterns.
+              </p>
+
+            </div>
+
+            {/* FEATURE 2 */}
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 transition hover:-translate-y-1 hover:border-cyan-500/30">
+
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-2xl">
+                🔒
+              </div>
+
+              <h3 className="mt-5 text-lg font-bold">
+                Secure Payments
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Payments are processed securely through Razorpay
+                with server-side verification.
+              </p>
+
+            </div>
+
+            {/* FEATURE 3 */}
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 transition hover:-translate-y-1 hover:border-cyan-500/30">
+
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10 text-2xl">
+                📊
+              </div>
+
+              <h3 className="mt-5 text-lg font-bold">
+                Smart Commerce
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Orders, transactions, and commerce activity are
+                organized into one intelligent platform.
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      {/* ======================================================
+          SHOPPING CTA
+      ====================================================== */}
+
+      <section className="mx-auto max-w-7xl px-5 py-20">
+
+        <div className="overflow-hidden rounded-3xl border border-cyan-500/20 bg-cyan-500/5 p-8 sm:p-12">
+
+          <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-center">
+
+            <div>
+
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">
+                Ready to shop?
+              </p>
+
+              <h2 className="mt-3 text-3xl font-black">
+                Find something you'll love.
+              </h2>
+
+              <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">
+                Explore our products and experience the IntentCart
+                shopping interface.
+              </p>
+
+            </div>
+
             <button
-              onClick={() =>
-                router.push(
-                  "/products"
-                )
-              }
-              className="mt-7 rounded-xl bg-cyan-500 px-6 py-3.5 text-sm font-bold text-slate-950 transition hover:bg-cyan-400"
+              onClick={() => router.push("/products")}
+              className="shrink-0 rounded-xl bg-cyan-400 px-7 py-4 text-sm font-black text-slate-950 transition hover:bg-cyan-300"
             >
-              🛍️ Browse Products
+              Start Shopping →
             </button>
 
           </div>
 
-        ) : (
-
-          <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-
-            {/* CART ITEMS */}
-
-            <div className="space-y-4">
-
-              <div className="flex items-center justify-between">
-
-                <h2 className="text-lg font-bold">
-                  Cart Items
-                </h2>
-
-                <button
-                  onClick={clearCart}
-                  disabled={loading}
-                  className="text-xs font-semibold text-red-400 transition hover:text-red-300 disabled:opacity-50"
-                >
-                  Clear Cart
-                </button>
-
-              </div>
-
-              {cart.map((item) => (
-
-                <div
-                  key={item.id}
-                  className="rounded-2xl border border-slate-800 bg-slate-900 p-5"
-                >
-
-                  <div className="flex gap-5">
-
-                    {/* PRODUCT ICON */}
-
-                    <button
-                      onClick={() =>
-                        router.push(
-                          `/products/${item.id}`
-                        )
-                      }
-                      className="flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl bg-slate-800 text-5xl transition hover:bg-slate-700"
-                    >
-                      {item.emoji}
-                    </button>
-
-                    {/* INFO */}
-
-                    <div className="min-w-0 flex-1">
-
-                      <div className="flex items-start justify-between gap-4">
-
-                        <div>
-
-                          <p className="text-[10px] font-bold uppercase tracking-widest text-cyan-400">
-                            {item.category}
-                          </p>
-
-                          <button
-                            onClick={() =>
-                              router.push(
-                                `/products/${item.id}`
-                              )
-                            }
-                            className="mt-1 text-left text-lg font-bold transition hover:text-cyan-400"
-                          >
-                            {item.name}
-                          </button>
-
-                          <p className="mt-1 text-xs text-slate-500">
-                            ⭐ {item.rating} ·{" "}
-                            {item.reviews} reviews
-                          </p>
-
-                        </div>
-
-                        <button
-                          onClick={() =>
-                            removeItem(
-                              item.id
-                            )
-                          }
-                          disabled={loading}
-                          className="text-xs font-semibold text-slate-600 transition hover:text-red-400 disabled:opacity-50"
-                        >
-                          Remove
-                        </button>
-
-                      </div>
-
-                      <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
-
-                        {/* QUANTITY */}
-
-                        <div className="flex items-center overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
-
-                          <button
-                            onClick={() =>
-                              updateCart(
-                                item.id,
-                                item.quantity -
-                                  1
-                              )
-                            }
-                            disabled={loading}
-                            className="flex h-9 w-9 items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                          >
-                            −
-                          </button>
-
-                          <span className="flex h-9 w-10 items-center justify-center border-x border-slate-700 text-xs font-bold">
-                            {item.quantity}
-                          </span>
-
-                          <button
-                            onClick={() =>
-                              updateCart(
-                                item.id,
-                                item.quantity +
-                                  1
-                              )
-                            }
-                            disabled={loading}
-                            className="flex h-9 w-9 items-center justify-center text-slate-400 hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                          >
-                            +
-                          </button>
-
-                        </div>
-
-                        {/* PRICE */}
-
-                        <div className="text-right">
-
-                          <p className="text-lg font-black">
-                            ₹
-                            {(
-                              Number(
-                                item.price
-                              ) *
-                              item.quantity
-                            ).toLocaleString(
-                              "en-IN"
-                            )}
-                          </p>
-
-                          {item.quantity >
-                            1 && (
-                            <p className="text-[11px] text-slate-600">
-                              ₹
-                              {Number(
-                                item.price
-                              ).toLocaleString(
-                                "en-IN"
-                              )}{" "}
-                              each
-                            </p>
-                          )}
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              ))}
-
-            </div>
-
-            {/* ORDER SUMMARY */}
-
-            <aside className="lg:sticky lg:top-24 lg:self-start">
-
-              <div className="rounded-2xl border border-slate-800 bg-slate-900 p-6">
-
-                <h2 className="text-lg font-bold">
-                  Order Summary
-                </h2>
-
-                <div className="mt-6 space-y-4">
-
-                  {/* SUBTOTAL */}
-
-                  <div className="flex justify-between text-sm">
-
-                    <span className="text-slate-500">
-                      Subtotal
-                    </span>
-
-                    <span className="font-semibold">
-                      ₹
-                      {subtotal.toLocaleString(
-                        "en-IN"
-                      )}
-                    </span>
-
-                  </div>
-
-                  {/* DELIVERY */}
-
-                  <div className="flex justify-between text-sm">
-
-                    <span className="text-slate-500">
-                      Delivery
-                    </span>
-
-                    <span className="font-semibold">
-
-                      {delivery ===
-                      0 ? (
-                        <span className="text-emerald-400">
-                          FREE
-                        </span>
-                      ) : (
-                        `₹${delivery}`
-                      )}
-
-                    </span>
-
-                  </div>
-
-                  {/* FREE DELIVERY */}
-
-                  {delivery ===
-                    0 && (
-                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-400">
-                      🎉 You unlocked free delivery!
-                    </div>
-                  )}
-
-                  {/* TOTAL */}
-
-                  <div className="border-t border-slate-800 pt-4">
-
-                    <div className="flex items-center justify-between">
-
-                      <span className="font-bold">
-                        Total
-                      </span>
-
-                      <span className="text-2xl font-black">
-                        ₹
-                        {total.toLocaleString(
-                          "en-IN"
-                        )}
-                      </span>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-                {/* CHECKOUT */}
-
-                <button
-                  onClick={
-                    handleCheckout
-                  }
-                  disabled={loading}
-                  className="mt-6 w-full rounded-xl bg-cyan-500 px-5 py-4 text-sm font-bold text-slate-950 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {loading
-                    ? "Processing..."
-                    : "💳 Proceed to Checkout"}
-                </button>
-
-                {/* CONTINUE SHOPPING */}
-
-                <button
-                  onClick={() =>
-                    router.push(
-                      "/products"
-                    )
-                  }
-                  disabled={loading}
-                  className="mt-3 w-full rounded-xl border border-slate-700 bg-slate-950 px-5 py-3.5 text-sm font-semibold text-slate-300 transition hover:bg-slate-800 hover:text-white disabled:opacity-50"
-                >
-                  Continue Shopping
-                </button>
-
-                {/* SECURITY */}
-
-                <div className="mt-6 border-t border-slate-800 pt-5">
-
-                  <div className="flex gap-3">
-
-                    <span className="text-lg">
-                      🔒
-                    </span>
-
-                    <div>
-
-                      <p className="text-xs font-bold">
-                        Secure Checkout
-                      </p>
-
-                      <p className="mt-1 text-[11px] leading-5 text-slate-600">
-                        Your payment will be securely processed through Razorpay.
-                      </p>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </aside>
-
-          </div>
-
-        )}
+        </div>
 
       </section>
 
-      {/* FOOTER */}
+      {/* ======================================================
+          FOOTER
+      ====================================================== */}
 
       <footer className="border-t border-slate-800">
 
-        <div className="mx-auto max-w-7xl px-5 py-8 text-center">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-5 py-8 text-center sm:flex-row sm:items-center sm:justify-between sm:text-left">
 
-          <p className="text-sm font-semibold">
-            IntentCart
-          </p>
+          <div>
 
-          <p className="mt-1 text-xs text-slate-600">
-            AI-powered commerce platform
+            <p className="font-bold">
+              IntentCart
+            </p>
+
+            <p className="mt-1 text-xs text-slate-600">
+              AI-powered commerce platform
+            </p>
+
+          </div>
+
+          <p className="text-xs text-slate-600">
+            © 2026 IntentCart. All rights reserved.
           </p>
 
         </div>

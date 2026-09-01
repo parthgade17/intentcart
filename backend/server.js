@@ -618,6 +618,388 @@ app.get(
     }
   }
 );
+// ======================================================
+// DELETE ORDER
+// PROTECTED ADMIN ENDPOINT
+// ======================================================
+
+app.delete(
+  "/api/orders/:id",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const orderId = Number(req.params.id);
+
+      if (!Number.isInteger(orderId) || orderId <= 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid order ID",
+        });
+      }
+
+      const result = await pool.query(
+        `
+        DELETE FROM orders
+        WHERE id = $1
+        RETURNING id
+        `,
+        [orderId]
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "Order not found",
+        });
+      }
+
+      res.json({
+        success: true,
+        message: `Transaction #${orderId} deleted successfully`,
+        deletedOrderId: orderId,
+      });
+    } catch (error) {
+      console.error(
+        "DELETE /api/orders/:id error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        error:
+          error.message ||
+          "Failed to delete transaction",
+      });
+    }
+  }
+);
+// ======================================================
+// EDIT ORDER
+// PROTECTED ADMIN ENDPOINT
+//
+// Allowed fields:
+// - amount
+// - status
+//
+// Razorpay order ID and payment ID are intentionally
+// NOT editable.
+// ======================================================
+
+app.put(
+  "/api/orders/:id",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const orderId =
+        Number(req.params.id);
+
+      if (!Number.isInteger(orderId)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid order ID",
+        });
+      }
+
+      const { amount, status } =
+        req.body;
+
+      // ------------------------------------------------
+      // VALIDATE AMOUNT
+      // ------------------------------------------------
+
+      let numericAmount = null;
+
+      if (
+        amount !== undefined &&
+        amount !== null
+      ) {
+        numericAmount = Number(amount);
+
+        if (
+          !Number.isFinite(
+            numericAmount
+          ) ||
+          numericAmount <= 0
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              "Amount must be a positive number",
+          });
+        }
+
+        numericAmount =
+          Number(
+            numericAmount.toFixed(2)
+          );
+      }
+
+      // ------------------------------------------------
+      // VALIDATE STATUS
+      // ------------------------------------------------
+
+      let normalizedStatus = null;
+
+      if (
+        status !== undefined &&
+        status !== null
+      ) {
+        normalizedStatus =
+          String(status)
+            .trim()
+            .toLowerCase();
+
+        const allowedStatuses = [
+          "created",
+          "paid",
+          "failed",
+        ];
+
+        if (
+          !allowedStatuses.includes(
+            normalizedStatus
+          )
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              "Invalid status. Allowed values: created, paid, failed",
+          });
+        }
+      }
+
+      // ------------------------------------------------
+      // REQUIRE SOMETHING TO EDIT
+      // ------------------------------------------------
+
+      if (
+        numericAmount === null &&
+        normalizedStatus === null
+      ) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Provide amount or status to update",
+        });
+      }
+
+      // ------------------------------------------------
+      // CHECK ORDER EXISTS
+      // ------------------------------------------------
+
+      const existingOrder =
+        await pool.query(
+          `
+          SELECT
+            id,
+            razorpay_order_id,
+            razorpay_payment_id,
+            amount,
+            currency,
+            status,
+            created_at
+          FROM orders
+          WHERE id = $1
+          `,
+          [orderId]
+        );
+
+      if (
+        existingOrder.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          error: "Order not found",
+        });
+      }
+
+      // ------------------------------------------------
+      // BUILD UPDATE QUERY
+      // ------------------------------------------------
+
+      const fields = [];
+      const values = [];
+      let parameterIndex = 1;
+
+      if (numericAmount !== null) {
+        fields.push(
+          `amount = $${parameterIndex}`
+        );
+
+        values.push(numericAmount);
+        parameterIndex++;
+      }
+
+      if (normalizedStatus !== null) {
+        fields.push(
+          `status = $${parameterIndex}`
+        );
+
+        values.push(
+          normalizedStatus
+        );
+        parameterIndex++;
+      }
+
+      values.push(orderId);
+
+      const updateQuery = `
+        UPDATE orders
+        SET ${fields.join(", ")}
+        WHERE id = $${parameterIndex}
+        RETURNING
+          id,
+          razorpay_order_id,
+          razorpay_payment_id,
+          amount,
+          currency,
+          status,
+          created_at
+      `;
+
+      const updatedOrder =
+        await pool.query(
+          updateQuery,
+          values
+        );
+
+      // ------------------------------------------------
+      // RETURN UPDATED ORDER + ITEMS
+      // ------------------------------------------------
+
+      const itemsResult =
+        await pool.query(
+          `
+          SELECT
+            id,
+            order_id,
+            product_id,
+            name,
+            category,
+            price,
+            quantity,
+            emoji
+          FROM order_items
+          WHERE order_id = $1
+          ORDER BY id ASC
+          `,
+          [orderId]
+        );
+
+      res.json({
+        success: true,
+        message:
+          "Transaction updated successfully",
+        order:
+          updatedOrder.rows[0],
+        items:
+          itemsResult.rows,
+      });
+    } catch (error) {
+      console.error(
+        "EDIT ORDER error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        error:
+          error.message ||
+          "Failed to update transaction",
+      });
+    }
+  }
+);
+
+// ======================================================
+// DELETE ORDER
+// PROTECTED ADMIN ENDPOINT
+//
+// Because order_items has ON DELETE CASCADE,
+// deleting the order automatically deletes its items.
+// ======================================================
+
+app.delete(
+  "/api/orders/:id",
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const orderId =
+        Number(req.params.id);
+
+      if (!Number.isInteger(orderId)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid order ID",
+        });
+      }
+
+      // ------------------------------------------------
+      // CHECK ORDER EXISTS
+      // ------------------------------------------------
+
+      const existingOrder =
+        await pool.query(
+          `
+          SELECT
+            id,
+            razorpay_order_id,
+            razorpay_payment_id,
+            amount,
+            currency,
+            status,
+            created_at
+          FROM orders
+          WHERE id = $1
+          `,
+          [orderId]
+        );
+
+      if (
+        existingOrder.rows.length === 0
+      ) {
+        return res.status(404).json({
+          success: false,
+          error: "Order not found",
+        });
+      }
+
+      const deletedOrder =
+        existingOrder.rows[0];
+
+      // ------------------------------------------------
+      // DELETE ORDER
+      // ------------------------------------------------
+
+      await pool.query(
+        `
+        DELETE FROM orders
+        WHERE id = $1
+        `,
+        [orderId]
+      );
+
+      res.json({
+        success: true,
+        message:
+          "Transaction deleted successfully",
+        deletedOrder,
+      });
+    } catch (error) {
+      console.error(
+        "DELETE ORDER error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        error:
+          error.message ||
+          "Failed to delete transaction",
+      });
+    }
+  }
+);
 
 // ======================================================
 // LIVE TRANSACTION METRICS
@@ -777,7 +1159,7 @@ app.get(
           ),
         successRate: Number(
           successRate.toFixed(2)
-        ),
+          ),
       };
 
       // ------------------------------------------------

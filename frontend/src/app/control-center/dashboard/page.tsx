@@ -1,9 +1,13 @@
-
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+
 type Metrics = {
   totalRevenue: number;
   totalTransactions: number;
@@ -33,9 +37,6 @@ type OrdersResponse = {
   error?: string;
 };
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-
 export default function AdminDashboardPage() {
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -44,7 +45,11 @@ export default function AdminDashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-    const handleLogout = async () => {
+  // =====================================================
+  // LOGOUT
+  // =====================================================
+
+  const handleLogout = async () => {
     try {
       await fetch("/api/admin/logout", {
         method: "POST",
@@ -53,68 +58,105 @@ export default function AdminDashboardPage() {
       console.error("Logout error:", error);
     }
 
-    window.location.href = "/control-center";
+    window.location.href = "/admin";
   };
 
-  const fetchDashboard = useCallback(async (refresh = false) => {
-    try {
-      if (refresh) {
-        setRefreshing(true);
-      } else {
-        setLoading(true);
-      }
+  // =====================================================
+  // FETCH DASHBOARD
+  // =====================================================
 
-      setError("");
+  const fetchDashboard = useCallback(
+    async (refresh = false) => {
+      try {
+        if (refresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
 
-      const [metricsResponse, ordersResponse] =
-        await Promise.all([
-          fetch(`${BACKEND_URL}/api/metrics`, {
-            cache: "no-store",
-          }),
-          fetch(`${BACKEND_URL}/api/orders`, {
-            cache: "no-store",
-          }),
-        ]);
+        setError("");
 
-      if (!metricsResponse.ok) {
-        throw new Error("Unable to load metrics");
-      }
+        const [metricsResponse, ordersResponse] =
+          await Promise.all([
+            fetch("/api/admin/metrics", {
+              cache: "no-store",
+            }),
 
-      if (!ordersResponse.ok) {
-        throw new Error("Unable to load orders");
-      }
+            fetch("/api/admin/orders", {
+              cache: "no-store",
+            }),
+          ]);
 
-      const metricsResult: MetricsResponse =
-        await metricsResponse.json();
+        if (!metricsResponse.ok) {
+          throw new Error(
+            "Unable to load dashboard metrics."
+          );
+        }
 
-      const ordersResult: OrdersResponse =
-        await ordersResponse.json();
+        if (!ordersResponse.ok) {
+          throw new Error(
+            "Unable to load transaction records."
+          );
+        }
 
-      if (!metricsResult.success || !metricsResult.metrics) {
-        throw new Error(
-          metricsResult.error || "Metrics unavailable"
+        const metricsResult: MetricsResponse =
+          await metricsResponse.json();
+
+        const ordersResult: OrdersResponse =
+          await ordersResponse.json();
+
+        console.log(
+          "ADMIN METRICS:",
+          metricsResult
         );
+
+        console.log(
+          "ADMIN ORDERS:",
+          ordersResult
+        );
+
+        if (
+          !metricsResult.success ||
+          !metricsResult.metrics
+        ) {
+          throw new Error(
+            metricsResult.error ||
+              "Metrics unavailable."
+          );
+        }
+
+        setMetrics(metricsResult.metrics);
+
+        if (
+          ordersResult.success &&
+          Array.isArray(ordersResult.orders)
+        ) {
+          setOrders(ordersResult.orders);
+        } else {
+          setOrders([]);
+        }
+      } catch (err) {
+        console.error(
+          "Dashboard error:",
+          err
+        );
+
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load dashboard data."
+        );
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
       }
+    },
+    []
+  );
 
-      setMetrics(metricsResult.metrics);
-
-      if (
-        ordersResult.success &&
-        Array.isArray(ordersResult.orders)
-      ) {
-        setOrders(ordersResult.orders);
-      }
-    } catch (err) {
-      console.error("Dashboard error:", err);
-
-      setError(
-        "Unable to load dashboard data. Make sure your backend is running."
-      );
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
+  // =====================================================
+  // INITIAL LOAD + AUTO REFRESH
+  // =====================================================
 
   useEffect(() => {
     fetchDashboard();
@@ -123,8 +165,14 @@ export default function AdminDashboardPage() {
       fetchDashboard(true);
     }, 10000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+    };
   }, [fetchDashboard]);
+
+  // =====================================================
+  // RECENT ORDERS
+  // =====================================================
 
   const recentOrders = useMemo(() => {
     return [...orders]
@@ -135,6 +183,10 @@ export default function AdminDashboardPage() {
       )
       .slice(0, 5);
   }, [orders]);
+
+  // =====================================================
+  // ORDER STATUS
+  // =====================================================
 
   const paidOrders = useMemo(() => {
     return orders.filter(
@@ -157,12 +209,20 @@ export default function AdminDashboardPage() {
     );
   }, [orders]);
 
+  // =====================================================
+  // FORMAT CURRENCY
+  // =====================================================
+
   const formatCurrency = (value: number) => {
     return `₹${value.toLocaleString("en-IN", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     })}`;
   };
+
+  // =====================================================
+  // LOADING
+  // =====================================================
 
   if (loading) {
     return (
@@ -181,6 +241,10 @@ export default function AdminDashboardPage() {
       </main>
     );
   }
+
+  // =====================================================
+  // ERROR
+  // =====================================================
 
   if (error) {
     return (
@@ -204,16 +268,31 @@ export default function AdminDashboardPage() {
           >
             Try Again
           </button>
+
+          <div className="mt-5">
+            <Link
+              href="/admin"
+              className="text-sm font-medium text-cyan-400 hover:text-cyan-300"
+            >
+              ← Back to Admin Login
+            </Link>
+          </div>
         </div>
       </main>
     );
   }
 
+  // =====================================================
+  // DASHBOARD
+  // =====================================================
+
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
 
-        {/* HEADER */}
+        {/* =================================================
+            HEADER
+        ================================================= */}
 
         <header className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -238,13 +317,17 @@ export default function AdminDashboardPage() {
 
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
-              onClick={() => fetchDashboard(true)}
+              onClick={() =>
+                fetchDashboard(true)
+              }
               disabled={refreshing}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-semibold transition hover:border-cyan-500/50 hover:bg-slate-800 disabled:opacity-60"
             >
               <span
                 className={
-                  refreshing ? "animate-spin" : ""
+                  refreshing
+                    ? "animate-spin"
+                    : ""
                 }
               >
                 ↻
@@ -265,7 +348,9 @@ export default function AdminDashboardPage() {
           </div>
         </header>
 
-        {/* SYSTEM STATUS */}
+        {/* =================================================
+            SYSTEM STATUS
+        ================================================= */}
 
         <section className="mb-6 grid gap-3 sm:grid-cols-3">
           <SystemStatus
@@ -287,9 +372,11 @@ export default function AdminDashboardPage() {
           />
         </section>
 
-        {/* LIVE STATUS */}
+        {/* =================================================
+            LIVE STATUS
+        ================================================= */}
 
-        <div className="mb-6 flex items-center justify-between rounded-xl border border-emerald-500/10 bg-emerald-500/5 px-4 py-3">
+        <div className="mb-6 flex flex-col gap-2 rounded-xl border border-emerald-500/10 bg-emerald-500/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
@@ -307,7 +394,9 @@ export default function AdminDashboardPage() {
           </span>
         </div>
 
-        {/* MAIN METRICS */}
+        {/* =================================================
+            MAIN METRICS
+        ================================================= */}
 
         <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard
@@ -339,13 +428,17 @@ export default function AdminDashboardPage() {
 
           <MetricCard
             title="Success Rate"
-            value={`${metrics?.successRate ?? 0}%`}
+            value={`${(
+              metrics?.successRate ?? 0
+            ).toFixed(1)}%`}
             description="Payment success rate"
             icon="✓"
           />
         </section>
 
-        {/* ORDER STATUS */}
+        {/* =================================================
+            ORDER STATUS
+        ================================================= */}
 
         <section className="mb-8 grid gap-4 sm:grid-cols-3">
           <StatusMetric
@@ -373,7 +466,9 @@ export default function AdminDashboardPage() {
           />
         </section>
 
-        {/* RECENT TRANSACTIONS */}
+        {/* =================================================
+            RECENT TRANSACTIONS
+        ================================================= */}
 
         <section className="mb-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
           <div className="flex flex-col gap-4 border-b border-slate-800 px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
@@ -401,7 +496,9 @@ export default function AdminDashboardPage() {
 
           {recentOrders.length === 0 ? (
             <div className="px-6 py-14 text-center">
-              <div className="text-3xl">📭</div>
+              <div className="text-3xl">
+                📭
+              </div>
 
               <h3 className="mt-3 font-semibold">
                 No transactions yet
@@ -439,76 +536,84 @@ export default function AdminDashboardPage() {
                 </thead>
 
                 <tbody>
-                  {recentOrders.map((order) => (
-                    <tr
-                      key={order.id}
-                      onClick={() =>
-                        (window.location.href =
-                          `/order/${order.id}`)
-                      }
-                      className="cursor-pointer border-b border-slate-800/70 transition hover:bg-slate-800/30"
-                    >
-                      <td className="px-6 py-5">
-                        <p className="font-semibold">
-                          #{order.id}
-                        </p>
+                  {recentOrders.map(
+                    (order) => (
+                      <tr
+                        key={order.id}
+                        onClick={() =>
+                          (window.location.href =
+                            `/order/${order.id}`)
+                        }
+                        className="cursor-pointer border-b border-slate-800/70 transition hover:bg-slate-800/30"
+                      >
+                        <td className="px-6 py-5">
+                          <p className="font-semibold">
+                            #{order.id}
+                          </p>
 
-                        <p className="mt-1 max-w-[180px] truncate text-xs text-slate-500">
-                          {order.razorpay_order_id}
-                        </p>
-                      </td>
+                          <p className="mt-1 max-w-[180px] truncate text-xs text-slate-500">
+                            {order.razorpay_order_id}
+                          </p>
+                        </td>
 
-                      <td className="px-6 py-5">
-                        <p className="max-w-[200px] truncate text-xs text-slate-400">
-                          {order.razorpay_payment_id ||
-                            "Not available"}
-                        </p>
-                      </td>
+                        <td className="px-6 py-5">
+                          <p className="max-w-[200px] truncate text-xs text-slate-400">
+                            {order.razorpay_payment_id ||
+                              "Not available"}
+                          </p>
+                        </td>
 
-                      <td className="px-6 py-5">
-                        <p className="font-semibold">
-                          {formatCurrency(
-                            Number(order.amount)
-                          )}
-                        </p>
-                      </td>
+                        <td className="px-6 py-5">
+                          <p className="font-semibold">
+                            {formatCurrency(
+                              Number(
+                                order.amount
+                              )
+                            )}
+                          </p>
+                        </td>
 
-                      <td className="px-6 py-5">
-                        <StatusBadge
-                          status={order.status}
-                        />
-                      </td>
-
-                      <td className="px-6 py-5">
-                        <p className="text-sm text-slate-300">
-                          {new Date(
-                            order.created_at
-                          ).toLocaleDateString(
-                            "en-IN"
-                          )}
-                        </p>
-
-                        <p className="mt-1 text-xs text-slate-500">
-                          {new Date(
-                            order.created_at
-                          ).toLocaleTimeString(
-                            "en-IN",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
+                        <td className="px-6 py-5">
+                          <StatusBadge
+                            status={
+                              order.status
                             }
-                          )}
-                        </p>
-                      </td>
-                    </tr>
-                  ))}
+                          />
+                        </td>
+
+                        <td className="px-6 py-5">
+                          <p className="text-sm text-slate-300">
+                            {new Date(
+                              order.created_at
+                            ).toLocaleDateString(
+                              "en-IN"
+                            )}
+                          </p>
+
+                          <p className="mt-1 text-xs text-slate-500">
+                            {new Date(
+                              order.created_at
+                            ).toLocaleTimeString(
+                              "en-IN",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
+                          </p>
+                        </td>
+                      </tr>
+                    )
+                  )}
                 </tbody>
               </table>
             </div>
           )}
         </section>
 
-        {/* ADMIN TOOLS */}
+        {/* =================================================
+            ADMIN TOOLS
+        ================================================= */}
 
         <section className="mb-8">
           <div className="mb-5">
@@ -538,7 +643,9 @@ export default function AdminDashboardPage() {
           </div>
         </section>
 
-        {/* FOOTER */}
+        {/* =================================================
+            FOOTER
+        ================================================= */}
 
         <footer className="border-t border-slate-800 pt-6 text-center text-xs text-slate-500">
           IntentCart Admin Dashboard • PostgreSQL + Razorpay
@@ -642,13 +749,18 @@ function StatusMetric({
   value: number;
   icon: string;
   description: string;
-  type: "success" | "warning" | "danger";
+  type:
+    | "success"
+    | "warning"
+    | "danger";
 }) {
   const styles = {
     success:
       "border-emerald-500/20 bg-emerald-500/5 text-emerald-400",
+
     warning:
       "border-amber-500/20 bg-amber-500/5 text-amber-400",
+
     danger:
       "border-red-500/20 bg-red-500/5 text-red-400",
   };
@@ -756,11 +868,7 @@ function StatusBadge({
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-400">
       <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-      {status}
+      {status || "Unknown"}
     </span>
   );
 }
-
-
-
-

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -68,13 +69,6 @@ type RiskResult = {
   lowValueHealth: number;
 };
 
-/*
-|--------------------------------------------------------------------------
-| BACKEND URL
-|--------------------------------------------------------------------------
-| Uses NEXT_PUBLIC_API_URL when available.
-| Falls back to localhost:5000 for local development.
-*/
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
@@ -88,10 +82,6 @@ export default function AIInsightsPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-
-  // ==========================================================
-  // FETCH AI INSIGHTS
-  // ==========================================================
 
   const fetchInsights = useCallback(async (refresh = false) => {
     try {
@@ -131,10 +121,6 @@ export default function AIInsightsPage() {
     }
   }, []);
 
-  // ==========================================================
-  // FETCH ORDERS
-  // ==========================================================
-
   const fetchOrders = useCallback(async () => {
     try {
       const response = await fetch(
@@ -159,18 +145,10 @@ export default function AIInsightsPage() {
     }
   }, []);
 
-  // ==========================================================
-  // INITIAL LOAD
-  // ==========================================================
-
   useEffect(() => {
     fetchInsights();
     fetchOrders();
   }, [fetchInsights, fetchOrders]);
-
-  // ==========================================================
-  // LIVE DATA
-  // ==========================================================
 
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -182,7 +160,6 @@ export default function AIInsightsPage() {
           fetch(`${BACKEND_URL}/api/metrics`, {
             cache: "no-store",
           }),
-
           fetch(`${BACKEND_URL}/api/orders`, {
             cache: "no-store",
           }),
@@ -215,26 +192,18 @@ export default function AIInsightsPage() {
           }
         }
       } catch (err) {
-        console.error(
-          "Live update error:",
-          err
-        );
+        console.error("Live update error:", err);
       }
     }, 5000);
 
     return () => clearInterval(interval);
   }, []);
 
-  // ==========================================================
-  // CHART DATA
-  // ==========================================================
-
   const chartData = useMemo(() => {
     const paidOrders = orders
       .filter(
         (order) =>
-          order.status.toLowerCase() ===
-          "paid"
+          order.status.toLowerCase() === "paid"
       )
       .sort(
         (a, b) =>
@@ -249,9 +218,7 @@ export default function AIInsightsPage() {
 
       runningRevenue += amount;
 
-      const date = new Date(
-        order.created_at
-      );
+      const date = new Date(order.created_at);
 
       return {
         name: `Payment ${index + 1}`,
@@ -261,20 +228,13 @@ export default function AIInsightsPage() {
         aov: Math.round(
           runningRevenue / (index + 1)
         ),
-        date: date.toLocaleDateString(
-          "en-IN",
-          {
-            day: "2-digit",
-            month: "short",
-          }
-        ),
+        date: date.toLocaleDateString("en-IN", {
+          day: "2-digit",
+          month: "short",
+        }),
       };
     });
   }, [orders]);
-
-  // ==========================================================
-  // RISK SCORE
-  // ==========================================================
 
   const risk = useMemo<RiskResult>(() => {
     if (orders.length === 0) {
@@ -292,45 +252,35 @@ export default function AIInsightsPage() {
 
     const paidOrders = orders.filter(
       (order) =>
-        order.status.toLowerCase() ===
-        "paid"
+        order.status.toLowerCase() === "paid"
     );
 
     const failedOrders = orders.filter(
       (order) =>
-        order.status.toLowerCase() ===
-        "failed"
+        order.status.toLowerCase() === "failed"
     );
 
     const paymentHealth = Math.round(
-      (paidOrders.length / orders.length) *
-        100
+      (paidOrders.length / orders.length) * 100
     );
 
     const transactionVolume = Math.min(
       100,
-      Math.round(
-        (orders.length / 20) * 100
-      )
+      Math.round((orders.length / 20) * 100)
     );
 
-    const lowValueOrders =
-      paidOrders.filter(
-        (order) =>
-          Number(order.amount) < 100
-      );
+    const lowValueOrders = paidOrders.filter(
+      (order) => Number(order.amount) < 100
+    );
 
     const lowValueRatio =
       paidOrders.length > 0
-        ? lowValueOrders.length /
-          paidOrders.length
+        ? lowValueOrders.length / paidOrders.length
         : 0;
 
     const lowValueHealth = Math.max(
       0,
-      Math.round(
-        100 - lowValueRatio * 100
-      )
+      Math.round(100 - lowValueRatio * 100)
     );
 
     const amounts = paidOrders.map(
@@ -342,8 +292,7 @@ export default function AIInsightsPage() {
     if (amounts.length >= 2) {
       const average =
         amounts.reduce(
-          (sum, value) =>
-            sum + value,
+          (sum, value) => sum + value,
           0
         ) / amounts.length;
 
@@ -351,10 +300,7 @@ export default function AIInsightsPage() {
         amounts.reduce(
           (sum, value) =>
             sum +
-            Math.pow(
-              value - average,
-              2
-            ),
+            Math.pow(value - average, 2),
           0
         ) / amounts.length;
 
@@ -363,8 +309,7 @@ export default function AIInsightsPage() {
 
       const coefficient =
         average > 0
-          ? standardDeviation /
-            average
+          ? standardDeviation / average
           : 0;
 
       revenueStability = Math.max(
@@ -401,8 +346,7 @@ export default function AIInsightsPage() {
     );
 
     score = Math.round(
-      score *
-        (0.6 + confidence * 0.4)
+      score * (0.6 + confidence * 0.4)
     );
 
     score = Math.max(
@@ -417,12 +361,10 @@ export default function AIInsightsPage() {
 
     if (score >= 70) {
       label = "HIGH RISK";
-
       description =
         "Several financial indicators require immediate attention.";
     } else if (score >= 40) {
       label = "MEDIUM RISK";
-
       description =
         "Some financial indicators should be monitored closely.";
     }
@@ -443,10 +385,6 @@ export default function AIInsightsPage() {
     };
   }, [orders]);
 
-  // ==========================================================
-  // FINANCE ALERTS
-  // ==========================================================
-
   const alerts = useMemo<Alert[]>(() => {
     const result: Alert[] = [];
 
@@ -464,8 +402,7 @@ export default function AIInsightsPage() {
 
     const failedOrders = orders.filter(
       (order) =>
-        order.status.toLowerCase() ===
-        "failed"
+        order.status.toLowerCase() === "failed"
     );
 
     if (failedOrders.length > 0) {
@@ -473,35 +410,28 @@ export default function AIInsightsPage() {
         type: "danger",
         icon: "🔴",
         title: `${failedOrders.length} payment failure${
-          failedOrders.length > 1
-            ? "s"
-            : ""
+          failedOrders.length > 1 ? "s" : ""
         } detected`,
         description:
           "Review failed transactions and investigate possible payment gateway or authorization issues.",
       });
     }
 
-    const lowValueOrders =
-      orders.filter(
-        (order) =>
-          order.status.toLowerCase() ===
-            "paid" &&
-          Number(order.amount) < 100
-      );
+    const lowValueOrders = orders.filter(
+      (order) =>
+        order.status.toLowerCase() === "paid" &&
+        Number(order.amount) < 100
+    );
 
     if (lowValueOrders.length > 0) {
       result.push({
         type: "warning",
         icon: "⚠️",
-        title:
-          "Low-value transactions detected",
+        title: "Low-value transactions detected",
         description: `${
           lowValueOrders.length
         } successful transaction${
-          lowValueOrders.length > 1
-            ? "s"
-            : ""
+          lowValueOrders.length > 1 ? "s" : ""
         } below ₹100 may experience higher relative processing costs.`,
       });
     }
@@ -526,8 +456,7 @@ export default function AIInsightsPage() {
         latest < previous
       ) {
         const drop =
-          ((previous - latest) /
-            previous) *
+          ((previous - latest) / previous) *
           100;
 
         if (drop >= 30) {
@@ -551,8 +480,7 @@ export default function AIInsightsPage() {
       result.push({
         type: "info",
         icon: "📊",
-        title:
-          "Small transaction dataset",
+        title: "Small transaction dataset",
         description:
           "Continue collecting payments before making long-term financial decisions.",
       });
@@ -565,8 +493,7 @@ export default function AIInsightsPage() {
       result.push({
         type: "success",
         icon: "✅",
-        title:
-          "Payment system healthy",
+        title: "Payment system healthy",
         description:
           "All currently recorded transactions have no detected payment failures.",
       });
@@ -575,39 +502,29 @@ export default function AIInsightsPage() {
     return result;
   }, [orders]);
 
-  // ==========================================================
-  // AI ACTION CENTER
-  // ==========================================================
-
   const actions = useMemo<Action[]>(() => {
     const result: Action[] = [];
 
     const failedOrders = orders.filter(
       (order) =>
-        order.status.toLowerCase() ===
-        "failed"
+        order.status.toLowerCase() === "failed"
     );
 
-    const lowValueOrders =
-      orders.filter(
-        (order) =>
-          order.status.toLowerCase() ===
-            "paid" &&
-          Number(order.amount) < 100
-      );
+    const lowValueOrders = orders.filter(
+      (order) =>
+        order.status.toLowerCase() === "paid" &&
+        Number(order.amount) < 100
+    );
 
     if (failedOrders.length > 0) {
       result.push({
         priority: "HIGH",
         icon: "🚨",
-        title:
-          "Payment failures detected",
+        title: "Payment failures detected",
         issue: `${
           failedOrders.length
         } failed payment${
-          failedOrders.length > 1
-            ? "s"
-            : ""
+          failedOrders.length > 1 ? "s" : ""
         } found.`,
         recommendation:
           "Investigate failed payments before focusing on revenue growth.",
@@ -621,8 +538,7 @@ export default function AIInsightsPage() {
       result.push({
         priority: "HIGH",
         icon: "🛡️",
-        title:
-          "Financial risk requires attention",
+        title: "Financial risk requires attention",
         issue: `Current risk score is ${risk.score}/100.`,
         recommendation:
           "Prioritize risk reduction before increasing transaction volume.",
@@ -633,8 +549,7 @@ export default function AIInsightsPage() {
       result.push({
         priority: "MEDIUM",
         icon: "🔎",
-        title:
-          "Monitor financial risk",
+        title: "Monitor financial risk",
         issue: `Current risk score is ${risk.score}/100.`,
         recommendation:
           "Continue monitoring transaction health and order-value changes.",
@@ -650,14 +565,11 @@ export default function AIInsightsPage() {
             ? "MEDIUM"
             : "LOW",
         icon: "🛒",
-        title:
-          "Low-value orders detected",
+        title: "Low-value orders detected",
         issue: `${
           lowValueOrders.length
         } successful order${
-          lowValueOrders.length > 1
-            ? "s"
-            : ""
+          lowValueOrders.length > 1 ? "s" : ""
         } below ₹100.`,
         recommendation:
           "Increase basket size so payment processing costs represent a smaller percentage of revenue.",
@@ -667,14 +579,11 @@ export default function AIInsightsPage() {
       });
     }
 
-    if (
-      risk.revenueStability < 60
-    ) {
+    if (risk.revenueStability < 60) {
       result.push({
         priority: "MEDIUM",
         icon: "📉",
-        title:
-          "Revenue volatility detected",
+        title: "Revenue volatility detected",
         issue:
           "Transaction values are changing significantly between payments.",
         recommendation:
@@ -688,14 +597,11 @@ export default function AIInsightsPage() {
       result.push({
         priority: "LOW",
         icon: "📊",
-        title:
-          "Collect more transaction data",
+        title: "Collect more transaction data",
         issue: `Only ${
           orders.length
         } transaction${
-          orders.length !== 1
-            ? "s"
-            : ""
+          orders.length !== 1 ? "s" : ""
         } currently exist.`,
         recommendation:
           "A larger dataset will make financial risk analysis more reliable.",
@@ -712,8 +618,7 @@ export default function AIInsightsPage() {
       result.push({
         priority: "LOW",
         icon: "✅",
-        title:
-          "Payment system is healthy",
+        title: "Payment system is healthy",
         issue:
           "No immediate payment reliability problem is detected.",
         recommendation:
@@ -726,18 +631,9 @@ export default function AIInsightsPage() {
     return result;
   }, [orders, risk]);
 
-  // ==========================================================
-  // ACTION CLICK
-  // ==========================================================
-
-  const handleAction = (
-    action: Action
-  ) => {
+  const handleAction = (action: Action) => {
     if (action.filter) {
-      setStatusFilter(
-        action.filter
-      );
-
+      setStatusFilter(action.filter);
       setSearch("");
     }
 
@@ -748,10 +644,6 @@ export default function AIInsightsPage() {
         block: "start",
       });
   };
-
-  // ==========================================================
-  // FILTER TRANSACTIONS
-  // ==========================================================
 
   const filteredOrders = useMemo(() => {
     return orders.filter((order) => {
@@ -782,15 +674,7 @@ export default function AIInsightsPage() {
         matchesStatus
       );
     });
-  }, [
-    orders,
-    search,
-    statusFilter,
-  ]);
-
-  // ==========================================================
-  // LOADING
-  // ==========================================================
+  }, [orders, search, statusFilter]);
 
   if (loading) {
     return (
@@ -809,10 +693,6 @@ export default function AIInsightsPage() {
       </main>
     );
   }
-
-  // ==========================================================
-  // ERROR
-  // ==========================================================
 
   if (error) {
     return (
@@ -849,9 +729,6 @@ export default function AIInsightsPage() {
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
-
-        {/* HEADER */}
-
         <header className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="mb-2 flex items-center gap-2">
@@ -881,13 +758,7 @@ export default function AIInsightsPage() {
             disabled={refreshing}
             className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-5 py-3 text-sm font-semibold hover:border-cyan-500/50 hover:bg-slate-800 disabled:opacity-60"
           >
-            <span
-              className={
-                refreshing
-                  ? "animate-spin"
-                  : ""
-              }
-            >
+            <span className={refreshing ? "animate-spin" : ""}>
               ↻
             </span>
 
@@ -896,8 +767,6 @@ export default function AIInsightsPage() {
               : "Refresh Dashboard"}
           </button>
         </header>
-
-        {/* SYSTEM STATUS */}
 
         <section className="mb-6 grid gap-3 sm:grid-cols-3">
           <StatusCard
@@ -919,8 +788,6 @@ export default function AIInsightsPage() {
           />
         </section>
 
-        {/* LIVE */}
-
         <div className="mb-6 flex items-center justify-between rounded-xl border border-emerald-500/10 bg-emerald-500/5 px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2.5 w-2.5">
@@ -939,16 +806,12 @@ export default function AIInsightsPage() {
           </span>
         </div>
 
-        {/* METRICS */}
-
         <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard
             title="Total Revenue"
             value={`₹${(
               metrics?.totalRevenue ?? 0
-            ).toLocaleString(
-              "en-IN"
-            )}`}
+            ).toLocaleString("en-IN")}`}
             description="Gross successful revenue"
             icon="₹"
           />
@@ -956,8 +819,7 @@ export default function AIInsightsPage() {
           <MetricCard
             title="Transactions"
             value={(
-              metrics?.totalTransactions ??
-              0
+              metrics?.totalTransactions ?? 0
             ).toString()}
             description="Total recorded payments"
             icon="↗"
@@ -966,11 +828,8 @@ export default function AIInsightsPage() {
           <MetricCard
             title="Average Order Value"
             value={`₹${(
-              metrics?.averageOrderValue ??
-              0
-            ).toLocaleString(
-              "en-IN"
-            )}`}
+              metrics?.averageOrderValue ?? 0
+            ).toLocaleString("en-IN")}`}
             description="Average successful order"
             icon="◈"
           />
@@ -984,8 +843,6 @@ export default function AIInsightsPage() {
             icon="✓"
           />
         </section>
-
-        {/* RISK SCORE */}
 
         <section className="mb-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
           <div className="border-b border-slate-800 px-6 py-5">
@@ -1050,25 +907,19 @@ export default function AIInsightsPage() {
 
               <RiskBar
                 title="Revenue Stability"
-                value={
-                  risk.revenueStability
-                }
+                value={risk.revenueStability}
                 description="Consistency of transaction values"
               />
 
               <RiskBar
                 title="Transaction Volume"
-                value={
-                  risk.transactionVolume
-                }
+                value={risk.transactionVolume}
                 description="Confidence from transaction volume"
               />
 
               <RiskBar
                 title="Low-Value Order Health"
-                value={
-                  risk.lowValueHealth
-                }
+                value={risk.lowValueHealth}
                 description="Protection against micro-transactions"
               />
 
@@ -1080,18 +931,14 @@ export default function AIInsightsPage() {
 
                   <p className="mt-1 text-xs leading-5 text-slate-500">
                     Only {orders.length} transaction
-                    {orders.length !== 1
-                      ? "s"
-                      : ""}{" "}
-                    currently exist. Collect more payments for stronger financial analysis.
+                    {orders.length !== 1 ? "s" : ""} currently exist.
+                    Collect more payments for stronger financial analysis.
                   </p>
                 </div>
               )}
             </div>
           </div>
         </section>
-
-        {/* AI ACTION CENTER */}
 
         <section className="mb-8 overflow-hidden rounded-2xl border border-cyan-500/20 bg-slate-900">
           <div className="border-b border-slate-800 bg-cyan-500/[0.03] px-6 py-6">
@@ -1139,9 +986,7 @@ export default function AIInsightsPage() {
           <div className="p-5">
             {actions.length === 0 ? (
               <div className="rounded-xl border border-slate-800 bg-slate-950 p-8 text-center">
-                <div className="text-3xl">
-                  🎯
-                </div>
+                <div className="text-3xl">🎯</div>
 
                 <h3 className="mt-3 font-semibold">
                   No actions required
@@ -1149,25 +994,19 @@ export default function AIInsightsPage() {
               </div>
             ) : (
               <div className="grid gap-4 lg:grid-cols-2">
-                {actions.map(
-                  (action, index) => (
-                    <ActionCard
-                      key={`${action.title}-${index}`}
-                      action={action}
-                      onAction={() =>
-                        handleAction(
-                          action
-                        )
-                      }
-                    />
-                  )
-                )}
+                {actions.map((action, index) => (
+                  <ActionCard
+                    key={`${action.title}-${index}`}
+                    action={action}
+                    onAction={() =>
+                      handleAction(action)
+                    }
+                  />
+                ))}
               </div>
             )}
           </div>
         </section>
-
-        {/* CHARTS */}
 
         <section className="mb-8 grid gap-6 lg:grid-cols-2">
           <ChartCard
@@ -1181,9 +1020,7 @@ export default function AIInsightsPage() {
                 width="100%"
                 height="100%"
               >
-                <LineChart
-                  data={chartData}
-                >
+                <LineChart data={chartData}>
                   <CartesianGrid
                     strokeDasharray="3 3"
                     stroke="#334155"
@@ -1206,12 +1043,9 @@ export default function AIInsightsPage() {
 
                   <Tooltip
                     contentStyle={{
-                      backgroundColor:
-                        "#0f172a",
-                      border:
-                        "1px solid #334155",
-                      borderRadius:
-                        "10px",
+                      backgroundColor: "#0f172a",
+                      border: "1px solid #334155",
+                      borderRadius: "10px",
                       color: "#fff",
                     }}
                   />
@@ -1252,9 +1086,7 @@ export default function AIInsightsPage() {
                 width="100%"
                 height="100%"
               >
-                <LineChart
-                  data={chartData}
-                >
+                <LineChart data={chartData}>
                   <CartesianGrid
                     strokeDasharray="3 3"
                     stroke="#334155"
@@ -1277,12 +1109,9 @@ export default function AIInsightsPage() {
 
                   <Tooltip
                     contentStyle={{
-                      backgroundColor:
-                        "#0f172a",
-                      border:
-                        "1px solid #334155",
-                      borderRadius:
-                        "10px",
+                      backgroundColor: "#0f172a",
+                      border: "1px solid #334155",
+                      borderRadius: "10px",
                       color: "#fff",
                     }}
                   />
@@ -1312,8 +1141,6 @@ export default function AIInsightsPage() {
           </ChartCard>
         </section>
 
-        {/* FINANCE ALERTS */}
-
         <section className="mb-8 rounded-2xl border border-slate-800 bg-slate-900">
           <div className="border-b border-slate-800 px-6 py-5">
             <p className="text-xs font-semibold uppercase tracking-widest text-amber-400">
@@ -1330,18 +1157,14 @@ export default function AIInsightsPage() {
           </div>
 
           <div className="grid gap-3 p-5">
-            {alerts.map(
-              (alert, index) => (
-                <AlertCard
-                  key={`${alert.title}-${index}`}
-                  alert={alert}
-                />
-              )
-            )}
+            {alerts.map((alert, index) => (
+              <AlertCard
+                key={`${alert.title}-${index}`}
+                alert={alert}
+              />
+            ))}
           </div>
         </section>
-
-        {/* GEMINI AI */}
 
         <section className="mb-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900">
           <div className="border-b border-slate-800 px-6 py-5">
@@ -1357,9 +1180,7 @@ export default function AIInsightsPage() {
           <div className="px-6 py-8 sm:px-10">
             {data?.quotaExceeded ? (
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-6">
-                <div className="text-2xl">
-                  ⏳
-                </div>
+                <div className="text-2xl">⏳</div>
 
                 <h3 className="mt-3 text-lg font-semibold">
                   Gemini free-tier limit reached
@@ -1377,9 +1198,7 @@ export default function AIInsightsPage() {
 
                     <article className="ai-markdown">
                       <ReactMarkdown>
-                        {
-                          data.insights
-                        }
+                        {data.insights}
                       </ReactMarkdown>
                     </article>
                   </div>
@@ -1395,8 +1214,6 @@ export default function AIInsightsPage() {
             )}
           </div>
         </section>
-
-        {/* TRANSACTIONS */}
 
         <section
           id="transactions"
@@ -1422,9 +1239,7 @@ export default function AIInsightsPage() {
                 type="text"
                 value={search}
                 onChange={(e) =>
-                  setSearch(
-                    e.target.value
-                  )
+                  setSearch(e.target.value)
                 }
                 placeholder="Search transaction ID, payment ID, amount..."
                 className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-cyan-500/50"
@@ -1433,9 +1248,7 @@ export default function AIInsightsPage() {
               <select
                 value={statusFilter}
                 onChange={(e) =>
-                  setStatusFilter(
-                    e.target.value
-                  )
+                  setStatusFilter(e.target.value)
                 }
                 className="rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-500/50"
               >
@@ -1458,8 +1271,7 @@ export default function AIInsightsPage() {
             </div>
           </div>
 
-          {filteredOrders.length ===
-          0 ? (
+          {filteredOrders.length === 0 ? (
             <div className="px-6 py-14 text-center">
               <h3 className="font-semibold">
                 No transactions found
@@ -1497,95 +1309,84 @@ export default function AIInsightsPage() {
                 </thead>
 
                 <tbody>
-                  {filteredOrders.map(
-                    (order) => (
-                      <tr
-                        key={order.id}
-                        onClick={() =>
-                          (window.location.href =
-                            `/order/${order.id}`)
-                        }
-                        className="cursor-pointer border-b border-slate-800/70 transition hover:bg-slate-800/30"
-                      >
-                        <td className="px-6 py-5">
-                          <p className="font-semibold">
-                            #{order.id}
-                          </p>
+                  {filteredOrders.map((order) => (
+                    <tr
+                      key={order.id}
+                      onClick={() =>
+                        (window.location.href =
+                          `/order/${order.id}`)
+                      }
+                      className="cursor-pointer border-b border-slate-800/70 transition hover:bg-slate-800/30"
+                    >
+                      <td className="px-6 py-5">
+                        <p className="font-semibold">
+                          #{order.id}
+                        </p>
 
-                          <p className="mt-1 max-w-[220px] truncate text-xs text-slate-500">
-                            {
-                              order.razorpay_order_id
-                            }
-                          </p>
-                        </td>
+                        <p className="mt-1 max-w-[220px] truncate text-xs text-slate-500">
+                          {order.razorpay_order_id}
+                        </p>
+                      </td>
 
-                        <td className="px-6 py-5">
-                          <p className="max-w-[220px] truncate text-xs text-slate-400">
-                            {order.razorpay_payment_id ||
-                              "Not available"}
-                          </p>
-                        </td>
+                      <td className="px-6 py-5">
+                        <p className="max-w-[220px] truncate text-xs text-slate-400">
+                          {order.razorpay_payment_id ||
+                            "Not available"}
+                        </p>
+                      </td>
 
-                        <td className="px-6 py-5">
-                          <p className="font-semibold">
-                            ₹
-                            {Number(
-                              order.amount
-                            ).toLocaleString(
-                              "en-IN",
-                              {
-                                minimumFractionDigits: 2,
-                              }
-                            )}
-                          </p>
+                      <td className="px-6 py-5">
+                        <p className="font-semibold">
+                          ₹
+                          {Number(
+                            order.amount
+                          ).toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                          })}
+                        </p>
 
-                          <p className="mt-1 text-xs text-slate-500">
-                            {
-                              order.currency
-                            }
-                          </p>
-                        </td>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {order.currency}
+                        </p>
+                      </td>
 
-                        <td className="px-6 py-5">
-                          <StatusBadge
-                            status={
-                              order.status
-                            }
-                          />
-                        </td>
+                      <td className="px-6 py-5">
+                        <StatusBadge
+                          status={order.status}
+                        />
+                      </td>
 
-                        <td className="px-6 py-5">
-                          <div className="flex items-center justify-between gap-4">
-                            <div>
-                              <p className="text-sm text-slate-300">
-                                {new Date(
-                                  order.created_at
-                                ).toLocaleDateString(
-                                  "en-IN"
-                                )}
-                              </p>
+                      <td className="px-6 py-5">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm text-slate-300">
+                              {new Date(
+                                order.created_at
+                              ).toLocaleDateString(
+                                "en-IN"
+                              )}
+                            </p>
 
-                              <p className="mt-1 text-xs text-slate-500">
-                                {new Date(
-                                  order.created_at
-                                ).toLocaleTimeString(
-                                  "en-IN",
-                                  {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  }
-                                )}
-                              </p>
-                            </div>
-
-                            <span className="text-sm font-semibold text-cyan-400">
-                              →
-                            </span>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {new Date(
+                                order.created_at
+                              ).toLocaleTimeString(
+                                "en-IN",
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </p>
                           </div>
-                        </td>
-                      </tr>
-                    )
-                  )}
+
+                          <span className="text-sm font-semibold text-cyan-400">
+                            →
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -1596,8 +1397,6 @@ export default function AIInsightsPage() {
           IntentCart AI Finance Controller • Live PostgreSQL Intelligence
         </footer>
       </div>
-
-      {/* MARKDOWN */}
 
       <style jsx global>{`
         .ai-markdown {
@@ -1674,10 +1473,6 @@ export default function AIInsightsPage() {
   );
 }
 
-// ==========================================================
-// STATUS CARD
-// ==========================================================
-
 function StatusCard({
   title,
   status,
@@ -1707,16 +1502,11 @@ function StatusCard({
 
       <div className="flex items-center gap-2 text-xs font-medium text-emerald-400">
         <span className="h-2 w-2 rounded-full bg-emerald-400" />
-
         {status}
       </div>
     </div>
   );
 }
-
-// ==========================================================
-// METRIC CARD
-// ==========================================================
 
 function MetricCard({
   title,
@@ -1753,10 +1543,6 @@ function MetricCard({
     </div>
   );
 }
-
-// ==========================================================
-// RISK BAR
-// ==========================================================
 
 function RiskBar({
   title,
@@ -1802,10 +1588,6 @@ function RiskBar({
     </div>
   );
 }
-
-// ==========================================================
-// ACTION CARD
-// ==========================================================
 
 function ActionCard({
   action,
@@ -1889,10 +1671,6 @@ function ActionCard({
   );
 }
 
-// ==========================================================
-// CHART CARD
-// ==========================================================
-
 function ChartCard({
   title,
   subtitle,
@@ -1925,10 +1703,6 @@ function ChartCard({
   );
 }
 
-// ==========================================================
-// EMPTY CHART
-// ==========================================================
-
 function EmptyChart() {
   return (
     <div className="flex h-full items-center justify-center text-sm text-slate-500">
@@ -1936,10 +1710,6 @@ function EmptyChart() {
     </div>
   );
 }
-
-// ==========================================================
-// ALERT CARD
-// ==========================================================
 
 function AlertCard({
   alert,
@@ -1980,17 +1750,12 @@ function AlertCard({
   );
 }
 
-// ==========================================================
-// STATUS BADGE
-// ==========================================================
-
 function StatusBadge({
   status,
 }: {
   status: string;
 }) {
-  const normalized =
-    status.toLowerCase();
+  const normalized = status.toLowerCase();
 
   if (normalized === "paid") {
     return (
