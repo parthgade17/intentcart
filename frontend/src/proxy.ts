@@ -10,12 +10,11 @@ export function proxy(request: NextRequest) {
   console.log("🔥 PROXY RUNNING:", pathname);
   console.log("🔐 ADMIN COOKIE:", adminAuth);
 
-  // Protect dashboard, transactions, and AI insights
-  if (
-    pathname.startsWith("/control-center/dashboard") ||
-    pathname.startsWith("/control-center/transactions") ||
-    pathname.startsWith("/control-center/ai-insights")
-  ) {
+  // =====================================================
+  // PROTECTED ADMIN AREA
+  // =====================================================
+
+  if (pathname.startsWith("/control-center/")) {
     if (adminAuth !== "true") {
       const loginUrl = request.nextUrl.clone();
 
@@ -24,30 +23,32 @@ export function proxy(request: NextRequest) {
 
       return NextResponse.redirect(loginUrl);
     }
+
+    return NextResponse.next();
   }
 
-  // If already logged in and visiting the login page,
-  // send the admin directly to the dashboard.
-  if (
-    pathname === "/control-center" &&
-    adminAuth === "true"
-  ) {
-    const dashboardUrl = request.nextUrl.clone();
+  // =====================================================
+  // ADMIN LOGIN PAGE
+  // =====================================================
 
-    dashboardUrl.pathname = "/control-center/dashboard";
-    dashboardUrl.search = "";
+  if (pathname === "/control-center") {
+    if (adminAuth === "true") {
+      const dashboardUrl = request.nextUrl.clone();
 
-    return NextResponse.redirect(dashboardUrl);
+      dashboardUrl.pathname =
+        "/control-center/dashboard";
+
+      dashboardUrl.search = "";
+
+      return NextResponse.redirect(dashboardUrl);
+    }
+
+    return NextResponse.next();
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    "/control-center",
-    "/control-center/dashboard/:path*",
-    "/control-center/transactions/:path*",
-    "/control-center/ai-insights/:path*",
-  ],
+  matcher: ["/control-center", "/control-center/:path*"],
 };
