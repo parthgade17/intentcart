@@ -1,3 +1,4 @@
+
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -15,6 +16,31 @@ const { Pool } = pg;
 // ======================================================
 
 const ADMIN_API_SECRET = process.env.ADMIN_API_SECRET;
+
+// ======================================================
+// SAFE ADMIN SECRET DIAGNOSTIC
+// ======================================================
+// This NEVER prints the actual secret.
+// It prints only its length and a SHA-256 fingerprint.
+// ======================================================
+
+const secretFingerprint = ADMIN_API_SECRET
+  ? crypto
+      .createHash("sha256")
+      .update(ADMIN_API_SECRET)
+      .digest("hex")
+      .substring(0, 12)
+  : "MISSING";
+
+console.log(
+  "🔐 ADMIN SECRET LENGTH:",
+  ADMIN_API_SECRET?.length || 0
+);
+
+console.log(
+  "🔐 ADMIN SECRET FINGERPRINT:",
+  secretFingerprint
+);
 
 if (!ADMIN_API_SECRET) {
   console.error(
@@ -618,61 +644,7 @@ app.get(
     }
   }
 );
-// ======================================================
-// DELETE ORDER
-// PROTECTED ADMIN ENDPOINT
-// ======================================================
 
-app.delete(
-  "/api/orders/:id",
-  requireAdmin,
-  async (req, res) => {
-    try {
-      const orderId = Number(req.params.id);
-
-      if (!Number.isInteger(orderId) || orderId <= 0) {
-        return res.status(400).json({
-          success: false,
-          error: "Invalid order ID",
-        });
-      }
-
-      const result = await pool.query(
-        `
-        DELETE FROM orders
-        WHERE id = $1
-        RETURNING id
-        `,
-        [orderId]
-      );
-
-      if (result.rowCount === 0) {
-        return res.status(404).json({
-          success: false,
-          error: "Order not found",
-        });
-      }
-
-      res.json({
-        success: true,
-        message: `Transaction #${orderId} deleted successfully`,
-        deletedOrderId: orderId,
-      });
-    } catch (error) {
-      console.error(
-        "DELETE /api/orders/:id error:",
-        error
-      );
-
-      res.status(500).json({
-        success: false,
-        error:
-          error.message ||
-          "Failed to delete transaction",
-      });
-    }
-  }
-);
 // ======================================================
 // EDIT ORDER
 // PROTECTED ADMIN ENDPOINT
@@ -1159,7 +1131,7 @@ app.get(
           ),
         successRate: Number(
           successRate.toFixed(2)
-          ),
+        ),
       };
 
       // ------------------------------------------------
@@ -1518,3 +1490,4 @@ process.on(
     );
   }
 );
+
