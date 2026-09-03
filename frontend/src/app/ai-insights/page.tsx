@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -69,9 +68,6 @@ type RiskResult = {
   lowValueHealth: number;
 };
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-
 export default function AIInsightsPage() {
   const [data, setData] = useState<AIResponse | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -82,6 +78,21 @@ export default function AIInsightsPage() {
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  /*
+   * IMPORTANT:
+   * Admin requests go through Next.js API routes.
+   *
+   * Browser
+   *   ↓
+   * /api/admin/ai-insights
+   * /api/admin/orders
+   * /api/admin/metrics
+   *   ↓
+   * Next.js checks admin cookie and adds ADMIN_API_SECRET
+   *   ↓
+   * Render backend
+   */
 
   const fetchInsights = useCallback(async (refresh = false) => {
     try {
@@ -94,8 +105,9 @@ export default function AIInsightsPage() {
       setError("");
 
       const response = await fetch(
-        `${BACKEND_URL}/api/ai-insights`,
+        "/api/admin/ai-insights",
         {
+          method: "GET",
           cache: "no-store",
         }
       );
@@ -113,7 +125,7 @@ export default function AIInsightsPage() {
       console.error("AI insights error:", err);
 
       setError(
-        "Unable to load AI analysis. Make sure your backend is running."
+        "Unable to load AI analysis. Please try again."
       );
     } finally {
       setLoading(false);
@@ -124,13 +136,20 @@ export default function AIInsightsPage() {
   const fetchOrders = useCallback(async () => {
     try {
       const response = await fetch(
-        `${BACKEND_URL}/api/orders`,
+        "/api/admin/orders",
         {
+          method: "GET",
           cache: "no-store",
         }
       );
 
-      if (!response.ok) return;
+      if (!response.ok) {
+        console.error(
+          "Orders request failed:",
+          response.status
+        );
+        return;
+      }
 
       const result = await response.json();
 
@@ -150,6 +169,10 @@ export default function AIInsightsPage() {
     fetchOrders();
   }, [fetchInsights, fetchOrders]);
 
+  /*
+   * Live monitoring.
+   * These requests also use the protected Next.js routes.
+   */
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
@@ -157,10 +180,12 @@ export default function AIInsightsPage() {
           metricsResponse,
           ordersResponse,
         ] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/metrics`, {
+          fetch("/api/admin/metrics", {
+            method: "GET",
             cache: "no-store",
           }),
-          fetch(`${BACKEND_URL}/api/orders`, {
+          fetch("/api/admin/orders", {
+            method: "GET",
             cache: "no-store",
           }),
         ]);

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -67,16 +68,6 @@ type RiskResult = {
   lowValueHealth: number;
 };
 
-/*
-|--------------------------------------------------------------------------
-| BACKEND URL
-|--------------------------------------------------------------------------
-| Uses NEXT_PUBLIC_API_URL when available.
-| Falls back to localhost:5000 for local development.
-*/
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
-
 export default function AIInsightsPage() {
   const [data, setData] = useState<AIResponse | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -103,7 +94,7 @@ export default function AIInsightsPage() {
       setError("");
 
       const response = await fetch(
-        `${BACKEND_URL}/api/ai-insights`,
+        "/api/admin/ai-insights",
         {
           cache: "no-store",
         }
@@ -122,7 +113,7 @@ export default function AIInsightsPage() {
       console.error("AI insights error:", err);
 
       setError(
-        "Unable to load AI analysis. Make sure your backend is running."
+        "Unable to load AI analysis. Please try again."
       );
     } finally {
       setLoading(false);
@@ -137,7 +128,7 @@ export default function AIInsightsPage() {
   const fetchOrders = useCallback(async () => {
     try {
       const response = await fetch(
-        `${BACKEND_URL}/api/orders`,
+        "/api/admin/orders",
         {
           cache: "no-store",
         }
@@ -178,11 +169,11 @@ export default function AIInsightsPage() {
           metricsResponse,
           ordersResponse,
         ] = await Promise.all([
-          fetch(`${BACKEND_URL}/api/metrics`, {
+          fetch("/api/admin/metrics", {
             cache: "no-store",
           }),
 
-          fetch(`${BACKEND_URL}/api/orders`, {
+          fetch("/api/admin/orders", {
             cache: "no-store",
           }),
         ]);
@@ -2016,3 +2007,4 @@ function StatusBadge({
     </span>
   );
 }
+
