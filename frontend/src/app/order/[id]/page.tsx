@@ -69,7 +69,7 @@ export default function OrderDetailsPage() {
 
         if (!response.ok || !data.success) {
           if (response.status === 401) {
-            window.location.href = "/admin";
+            window.location.href = "/control-center";
             return;
           }
 

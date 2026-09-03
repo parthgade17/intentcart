@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from "next/server";
 
 export function proxy(request: NextRequest) {
@@ -11,7 +12,18 @@ export function proxy(request: NextRequest) {
   console.log("🔐 ADMIN COOKIE:", adminAuth);
 
   // =====================================================
-  // PROTECTED ADMIN AREA
+  // ADMIN LOGIN PAGE
+  // =====================================================
+  // Always allow /control-center to show the login page.
+  // We do NOT redirect authenticated users automatically.
+  // =====================================================
+
+  if (pathname === "/control-center") {
+    return NextResponse.next();
+  }
+
+  // =====================================================
+  // PROTECTED ADMIN PAGES
   // =====================================================
 
   if (pathname.startsWith("/control-center/")) {
@@ -28,27 +40,15 @@ export function proxy(request: NextRequest) {
   }
 
   // =====================================================
-  // ADMIN LOGIN PAGE
+  // EVERYTHING ELSE
   // =====================================================
-
-  if (pathname === "/control-center") {
-    if (adminAuth === "true") {
-      const dashboardUrl = request.nextUrl.clone();
-
-      dashboardUrl.pathname =
-        "/control-center/dashboard";
-
-      dashboardUrl.search = "";
-
-      return NextResponse.redirect(dashboardUrl);
-    }
-
-    return NextResponse.next();
-  }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/control-center", "/control-center/:path*"],
+  matcher: [
+    "/control-center",
+    "/control-center/:path*",
+  ],
 };

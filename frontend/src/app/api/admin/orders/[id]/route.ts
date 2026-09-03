@@ -3,7 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000";
+  "https://intentcart-pixx.onrender.com";
+
+const ADMIN_API_SECRET =
+  process.env.ADMIN_API_SECRET || "";
 
 export async function GET(
   request: NextRequest,
@@ -16,16 +19,35 @@ export async function GET(
     // ADMIN AUTHENTICATION
     // =====================================================
 
-    const adminCookie =
-      request.cookies.get("intentcart_admin_auth")?.value;
+    const adminAuth = request.cookies.get(
+      "intentcart_admin_auth"
+    )?.value;
 
-    if (adminCookie !== "true") {
+    if (adminAuth !== "true") {
       return NextResponse.json(
         {
           success: false,
           error: "Unauthorized",
         },
         { status: 401 }
+      );
+    }
+
+    // =====================================================
+    // CHECK ADMIN API SECRET
+    // =====================================================
+
+    if (!ADMIN_API_SECRET) {
+      console.error(
+        "ADMIN_API_SECRET is missing from frontend environment variables."
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Admin API configuration is missing.",
+        },
+        { status: 500 }
       );
     }
 
@@ -46,12 +68,16 @@ export async function GET(
     }
 
     // =====================================================
-    // FETCH ORDER FROM BACKEND
+    // FETCH ORDER FROM PROTECTED BACKEND
     // =====================================================
 
     const response = await fetch(
       `${BACKEND_URL}/api/orders/${encodeURIComponent(id)}`,
       {
+        method: "GET",
+        headers: {
+          "x-admin-api-secret": ADMIN_API_SECRET,
+        },
         cache: "no-store",
       }
     );
@@ -75,7 +101,9 @@ export async function GET(
             data.error ||
             "Unable to load order.",
         },
-        { status: response.status || 500 }
+        {
+          status: response.status || 500,
+        }
       );
     }
 
@@ -103,7 +131,9 @@ export async function GET(
       {
         success: false,
         error:
-          "Unable to connect to the backend server.",
+          error instanceof Error
+            ? error.message
+            : "Unable to connect to the backend server.",
       },
       { status: 500 }
     );

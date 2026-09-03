@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -58,7 +59,7 @@ export default function AdminDashboardPage() {
       console.error("Logout error:", error);
     }
 
-    window.location.href = "/admin";
+    window.location.href = "/control-center";
   };
 
   // =====================================================
@@ -271,7 +272,7 @@ export default function AdminDashboardPage() {
 
           <div className="mt-5">
             <Link
-              href="/admin"
+              href="/control-center"
               className="text-sm font-medium text-cyan-400 hover:text-cyan-300"
             >
               ← Back to Admin Login
@@ -872,3 +873,4 @@ function StatusBadge({
     </span>
   );
 }
+
